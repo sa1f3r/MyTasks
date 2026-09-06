@@ -1,6 +1,6 @@
 {
-  "id": "custom-task-tracker",
-  "name": "Custom Task Tracker",
+  "id": "my-tasks",
+  "name": "My Tasks",
   "version": "1.0.0",
   "minAppVersion": "0.15.0",
   "description": "Task tracker with Kanban, Calendar and Tree views",
