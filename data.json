@@ -1,0 +1,32 @@
+{
+  "masterFilePath": "Tasks.md",
+  "statusPrefix": "@status/",
+  "projectPrefix": "@project/",
+  "priorityPrefix": "@priority/",
+  "startDatePrefix": "🛫 ",
+  "dueDatePrefix": "📅 ",
+  "completionDatePrefix": "✅ ",
+  "doneStatusId": "done",
+  "statuses": [
+    {
+      "id": "todo",
+      "label": "To Do",
+      "color": "#7f8c8d"
+    },
+    {
+      "id": "in_progress",
+      "label": "In Progress",
+      "color": "#f39c12"
+    },
+    {
+      "id": "done",
+      "label": "Done",
+      "color": "#2ecc71"
+    },
+    {
+      "id": "adandoned",
+      "label": "Abandoned",
+      "color": "#9b59b6"
+    }
+  ]
+}
