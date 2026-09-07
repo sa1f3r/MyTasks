@@ -24,7 +24,6 @@ const PRIORITY_LABELS = {
     5: { label: 'P5: Очень важно', class: 'tt-p5', badge: 'P5' }
 };
 
-// Обновленная палитра: более насыщенные, контрастные, но мягкие оттенки
 const PASTEL_COLORS = [
     '#e06c75', '#d19a66', '#e5c07b', '#98c379', 
     '#56b6c2', '#61afef', '#c678dd', '#d16d94', 
@@ -65,6 +64,30 @@ function addDaysToDateStr(dateStr, days) {
     const d = new Date(parts[0], parts[1] - 1, parts[2]);
     d.setDate(d.getDate() + days);
     return formatDate(d);
+}
+
+// Поисковый подсказчик для выбора файлов из хранилища (Autocomplete)
+class FileSuggest extends obsidian.AbstractInputSuggest {
+    constructor(app, inputEl) {
+        super(app, inputEl);
+        this.inputEl = inputEl;
+    }
+
+    getSuggestions(query) {
+        const files = this.app.vault.getMarkdownFiles();
+        const lowerQuery = query.toLowerCase().trim();
+        return files.filter(file => file.path.toLowerCase().includes(lowerQuery));
+    }
+
+    renderSuggestion(file, el) {
+        el.setText(file.path);
+    }
+
+    selectSuggestion(file) {
+        this.inputEl.value = file.path;
+        this.inputEl.dispatchEvent(new Event('input'));
+        this.close();
+    }
 }
 
 class TaskEngine {
@@ -518,27 +541,52 @@ class TaskTrackerView extends obsidian.ItemView {
 
         const controls = header.createDiv({ cls: 'task-tracker-controls' });
 
-        const projSelect = controls.createEl('select');
-        projSelect.createEl('option', { text: '📁 Все проекты', value: 'ALL' });
-        this.allProjects.forEach(p => {
-            const opt = projSelect.createEl('option', { text: `📂 ${p}`, value: p });
-            if (p === this.selectedProjectFilter) opt.selected = true;
-        });
+        const projDropdown = controls.createDiv({ cls: 'tt-project-filter-dropdown' });
+        const currentProjectName = this.selectedProjectFilter === 'ALL' ? '📁 Все проекты' : `📂 ${this.selectedProjectFilter}`;
+        projDropdown.createSpan({ text: currentProjectName });
+        projDropdown.createSpan({ text: '▼', cls: 'tt-dropdown-arrow' });
 
-        projSelect.onchange = (e) => {
-            this.selectedProjectFilter = e.target.value;
-            this.renderUI();
+        projDropdown.onclick = (e) => {
+            const menu = new obsidian.Menu();
+            menu.addItem(item => {
+                item.setTitle('📁 Все проекты')
+                    .setChecked(this.selectedProjectFilter === 'ALL')
+                    .onClick(() => {
+                        this.selectedProjectFilter = 'ALL';
+                        this.renderUI();
+                    });
+            });
+            menu.addSeparator();
+            this.allProjects.forEach(p => {
+                menu.addItem(item => {
+                    item.setTitle(`📂 ${p}`)
+                        .setChecked(this.selectedProjectFilter === p)
+                        .onClick(() => {
+                            this.selectedProjectFilter = p;
+                            this.renderUI();
+                        });
+                });
+            });
+            menu.showAtPosition({ x: e.clientX, y: e.clientY });
         };
 
-        const btnTree = controls.createEl('button', { text: '🌳 Древо' });
-        const btnKanban = controls.createEl('button', { text: '📋 Канбан' });
-        const btnCal = controls.createEl('button', { text: '📅 Календарь' });
+        const viewSwitcher = controls.createDiv({ cls: 'tt-view-switcher' });
+        const createViewTab = (mode, label, icon) => {
+            const tab = viewSwitcher.createEl('button', { 
+                cls: `tt-view-tab ${this.currentMode === mode ? 'is-active' : ''}`, 
+                text: `${icon} ${label}` 
+            });
+            tab.onclick = () => {
+                this.currentMode = mode;
+                this.renderUI();
+            };
+        };
+        createViewTab('tree', 'Древо', '🌳');
+        createViewTab('kanban', 'Канбан', '📋');
+        createViewTab('calendar', 'Календарь', '📅');
+
         const btnAdd = controls.createEl('button', { text: '+ Задача', cls: 'mod-cta' });
         const btnAddProj = controls.createEl('button', { text: '+ Проект' });
-
-        btnTree.onclick = () => { this.currentMode = 'tree'; this.renderUI(); };
-        btnKanban.onclick = () => { this.currentMode = 'kanban'; this.renderUI(); };
-        btnCal.onclick = () => { this.currentMode = 'calendar'; this.renderUI(); };
 
         btnAdd.onclick = () => new AddTaskModal(this.app, this.plugin, () => this.refresh()).open();
         btnAddProj.onclick = () => new AddProjectModal(this.app, this.plugin, () => this.refresh()).open();
@@ -1189,7 +1237,11 @@ class AddTaskModal extends obsidian.Modal {
 
         new obsidian.Setting(contentEl)
             .setName('Текст задачи')
-            .addText(text => text.onChange(v => taskText = v));
+            .addTextArea(text => {
+                text.inputEl.rows = 4;
+                text.inputEl.style.width = '100%';
+                text.onChange(v => taskText = v);
+            });
 
         new obsidian.Setting(contentEl)
             .setName('Статус')
@@ -1282,14 +1334,34 @@ class TaskTrackerSettingTab extends obsidian.PluginSettingTab {
         containerEl.empty();
         containerEl.createEl('h2', { text: 'Настройки Task Tracker' });
 
+        // Выбор мастер-файла с автодополнением (FileSuggest)
         new obsidian.Setting(containerEl)
             .setName('Мастер-файл заметок')
-            .setDesc('Путь к файлу, где хранятся задачи')
-            .addText(text => text
-                .setValue(this.plugin.settings.masterFilePath)
-                .onChange(async (val) => {
-                    this.plugin.settings.masterFilePath = val;
-                    await this.plugin.saveSettings();
+            .setDesc('Путь к файлу, где хранятся задачи (начните ввод для автопоиска по хранилищу)')
+            .addText(text => {
+                text.setValue(this.plugin.settings.masterFilePath)
+                    .onChange(async (val) => {
+                        this.plugin.settings.masterFilePath = val;
+                        await this.plugin.saveSettings();
+                    });
+                new FileSuggest(this.app, text.inputEl);
+            });
+
+        // Настройка горячей клавиши
+        new obsidian.Setting(containerEl)
+            .setName('Горячая клавиша: Быстрое создание задачи')
+            .setDesc('По умолчанию назначен хоткей Ctrl+Alt+T (Cmd+Option+T). Нажмите для переназначения в меню Obsidian.')
+            .addButton(btn => btn
+                .setButtonText('Настроить хоткей')
+                .onClick(() => {
+                    const settingModal = this.app.setting;
+                    settingModal.open();
+                    settingModal.openTabById('hotkeys');
+                    const searchInput = settingModal.activeTab?.searchComponent;
+                    if (searchInput) {
+                        searchInput.setValue(`${this.plugin.manifest.name}: Быстрое создание задачи`);
+                        searchInput.inputEl.dispatchEvent(new Event('input'));
+                    }
                 }));
 
         new obsidian.Setting(containerEl)
@@ -1412,18 +1484,42 @@ class TaskTrackerSettingTab extends obsidian.PluginSettingTab {
 class TaskTrackerPlugin extends obsidian.Plugin {
     async onload() {
         await this.loadSettings();
+
         this.registerView(
             'custom-task-tracker-view',
             (leaf) => new TaskTrackerView(leaf, this)
         );
+
         this.addRibbonIcon('check-square', 'Custom Task Tracker', () => {
             this.activateView();
         });
+
         this.addCommand({
             id: 'open-task-tracker',
             name: 'Открыть плагин трекера задач',
             callback: () => this.activateView()
         });
+
+        // Команда для быстрого создания задачи через хоткей
+        this.addCommand({
+            id: 'quick-add-task',
+            name: 'Быстрое создание задачи',
+            hotkeys: [
+                {
+                    modifiers: ['Mod', 'Alt'],
+                    key: 't'
+                }
+            ],
+            callback: () => {
+                new AddTaskModal(this.app, this, () => {
+                    const leaf = this.app.workspace.getLeavesOfType('custom-task-tracker-view')[0];
+                    if (leaf && leaf.view instanceof TaskTrackerView) {
+                        leaf.view.refresh();
+                    }
+                }).open();
+            }
+        });
+
         this.addSettingTab(new TaskTrackerSettingTab(this.app, this));
     }
 
@@ -1444,8 +1540,8 @@ class TaskTrackerPlugin extends obsidian.Plugin {
         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
     }
 
-    async saveSettings() {
-        await this.saveData(this.settings);
+    saveSettings() {
+        return this.saveData(this.settings);
     }
 }
 

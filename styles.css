@@ -31,11 +31,69 @@
     align-items: center;
 }
 
-.task-tracker-controls select,
 .task-tracker-controls button {
     padding: 4px 10px;
     border-radius: 4px;
     cursor: pointer;
+}
+
+/* ==================== СЕГМЕНТИРОВАННЫЙ ПЕРЕКЛЮЧАТЕЛЬ ВИДОВ ==================== */
+
+.tt-view-switcher {
+    display: flex;
+    background: var(--background-secondary);
+    padding: 3px;
+    border-radius: 6px;
+    gap: 2px;
+}
+
+.tt-view-tab {
+    background: transparent;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 0.85em;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.tt-view-tab:hover {
+    color: var(--text-normal);
+    background: var(--background-modifier-hover);
+}
+
+.tt-view-tab.is-active {
+    background: var(--background-primary);
+    color: var(--text-normal);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    font-weight: 600;
+}
+
+/* ==================== ВЫПАДАЮЩЕЕ МЕНЮ ПРОЕКТОВ ==================== */
+
+.tt-project-filter-dropdown {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85em;
+    color: var(--text-normal);
+    transition: border-color 0.2s ease;
+}
+
+.tt-project-filter-dropdown:hover {
+    border-color: var(--interactive-accent);
+}
+
+.tt-dropdown-arrow {
+    font-size: 0.7em;
+    color: var(--text-muted);
 }
 
 .task-tracker-view-content {
@@ -447,6 +505,48 @@ body.tt-resizing-active .tt-calendar-bar {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
     pointer-events: none;
     z-index: 9999;
+}
+
+/* ==================== СТИЛИ МОДАЛКИ И ПРЕСЕТОВ ДАТ ==================== */
+
+.tt-modal-date-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+}
+
+.tt-styled-date-input {
+    width: 100%;
+    padding: 6px;
+    border-radius: 4px;
+    border: 1px solid var(--background-modifier-border);
+    background: var(--background-primary);
+    color: var(--text-normal);
+}
+
+.tt-date-presets {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.tt-preset-chip {
+    font-size: 0.75em;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+}
+
+.tt-preset-chip:hover {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border-color: var(--interactive-accent);
 }
 
 /* ==================== НАСТРОЙКИ: ПАСТЕЛЬНЫЕ ЧИПЫ И ЦВЕТА ==================== */
