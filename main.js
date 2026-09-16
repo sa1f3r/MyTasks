@@ -9,6 +9,7 @@ const DEFAULT_SETTINGS = {
     dueDatePrefix: '📅 ',
     completionDatePrefix: '✅ ',
     doneStatusId: 'done',
+    hideDoneUnscheduled: false,
     statuses: [
         { id: 'todo', label: 'To Do', color: '#7f8c8d' },
         { id: 'in_progress', label: 'In Progress', color: '#f39c12' },
@@ -29,6 +30,34 @@ const PASTEL_COLORS = [
     '#56b6c2', '#61afef', '#c678dd', '#d16d94', 
     '#4ba3e3', '#42b883', '#f39c12', '#e74c3c'
 ];
+
+/* Минималистичные иконки в стиле Notion */
+const NOTION_ICONS = {
+    target: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="4"></circle></svg>',
+    folder: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>',
+    calendar: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>',
+    tree: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><path d="M21 12h-8"></path><path d="M21 6h-8"></path><path d="M21 18h-8"></path><path d="M3 6v12"></path><path d="M3 12h4"></path></svg>',
+    kanban: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><rect x="3" y="3" width="5" height="18" rx="1"></rect><rect x="11" y="3" width="5" height="12" rx="1"></rect><rect x="19" y="3" width="2" height="8" rx="1"></rect></svg>',
+    start: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><polyline points="13 17 18 12 13 7"></polyline><line x1="6" y1="12" x2="18" y2="12"></line></svg>',
+    check: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><polyline points="20 6 9 17 4 12"></polyline></svg>',
+    expand: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><polyline points="7 13 12 18 17 13"></polyline><polyline points="7 6 12 11 17 6"></polyline></svg>',
+    collapse: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><polyline points="17 11 12 6 7 11"></polyline><polyline points="17 18 12 13 7 18"></polyline></svg>',
+    eye: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>',
+    eyeOff: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>',
+    chevronLeft: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><polyline points="15 18 9 12 15 6"></polyline></svg>',
+    chevronRight: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><polyline points="9 18 15 12 9 6"></polyline></svg>',
+    chevronDown: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><polyline points="6 9 12 15 18 9"></polyline></svg>',
+    chevronRightSmall: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><polyline points="9 18 15 12 9 6"></polyline></svg>',
+    plus: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>',
+    trash: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
+    grip: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><circle cx="9" cy="5" r="1"></circle><circle cx="9" cy="12" r="1"></circle><circle cx="9" cy="19" r="1"></circle><circle cx="15" cy="5" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="15" cy="19" r="1"></circle></svg>',
+    sliders: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>',
+    list: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>'
+};
+
+function renderIcon(iconName) {
+    return NOTION_ICONS[iconName] || '';
+}
 
 function escapeRegExp(string) {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -66,7 +95,6 @@ function addDaysToDateStr(dateStr, days) {
     return formatDate(d);
 }
 
-// Поисковый подсказчик для выбора файлов из хранилища (Autocomplete)
 class FileSuggest extends obsidian.AbstractInputSuggest {
     constructor(app, inputEl) {
         super(app, inputEl);
@@ -220,11 +248,18 @@ class TaskEngine {
                     completionDate,
                     project,
                     indentLevel: indent,
-                    parentText: parentTask ? parentTask.text : null
+                    parentLineIndex: parentTask ? parentTask.lineIndex : null,
+                    parentText: parentTask ? parentTask.text : null,
+                    hasChildren: false
                 };
 
+                if (parentTask) {
+                    const parentInList = tasks.find(t => t.lineIndex === parentTask.lineIndex);
+                    if (parentInList) parentInList.hasChildren = true;
+                }
+
                 tasks.push(taskObj);
-                parentStack.push({ indent, text: cleanedText });
+                parentStack.push({ indent, lineIndex: index, text: cleanedText });
             }
         }
 
@@ -404,6 +439,7 @@ class TaskTrackerView extends obsidian.ItemView {
         this.currentMode = 'calendar';
         this.selectedProjectFilter = 'ALL';
         this.treeStatusPosition = 'end';
+        this.collapsedTasks = new Set();
         this.tasks = [];
         this.allProjects = [];
         this.calendarYear = new Date().getFullYear();
@@ -434,6 +470,25 @@ class TaskTrackerView extends obsidian.ItemView {
     getFilteredTasks() {
         if (this.selectedProjectFilter === 'ALL') return this.tasks;
         return this.tasks.filter(t => t.project === this.selectedProjectFilter);
+    }
+
+    getTasksMap() {
+        const map = new Map();
+        this.tasks.forEach(t => map.set(t.lineIndex, t));
+        return map;
+    }
+
+    isTaskCollapsed(task, tasksMap) {
+        let currentParentIndex = task.parentLineIndex;
+        while (currentParentIndex !== null && currentParentIndex !== undefined) {
+            if (this.collapsedTasks.has(currentParentIndex)) {
+                return true;
+            }
+            const parentTask = tasksMap.get(currentParentIndex);
+            if (!parentTask) break;
+            currentParentIndex = parentTask.parentLineIndex;
+        }
+        return false;
     }
 
     openTaskContextMenu(event, task) {
@@ -537,19 +592,24 @@ class TaskTrackerView extends obsidian.ItemView {
         container.addClass('task-tracker-container');
 
         const header = container.createDiv({ cls: 'task-tracker-header' });
-        header.createEl('h3', { text: '🎯 Task Hub' });
+        const titleEl = header.createEl('h3');
+        titleEl.innerHTML = `${renderIcon('target')} Task Hub`;
 
         const controls = header.createDiv({ cls: 'task-tracker-controls' });
 
         const projDropdown = controls.createDiv({ cls: 'tt-project-filter-dropdown' });
-        const currentProjectName = this.selectedProjectFilter === 'ALL' ? '📁 Все проекты' : `📂 ${this.selectedProjectFilter}`;
-        projDropdown.createSpan({ text: currentProjectName });
+        const currentProjectName = this.selectedProjectFilter === 'ALL'
+            ? `${renderIcon('folder')} Все проекты`
+            : `${renderIcon('folder')} ${this.selectedProjectFilter}`;
+        
+        projDropdown.createSpan().innerHTML = currentProjectName;
         projDropdown.createSpan({ text: '▼', cls: 'tt-dropdown-arrow' });
 
         projDropdown.onclick = (e) => {
             const menu = new obsidian.Menu();
             menu.addItem(item => {
-                item.setTitle('📁 Все проекты')
+                item.setTitle('Все проекты')
+                    .setIcon('folder')
                     .setChecked(this.selectedProjectFilter === 'ALL')
                     .onClick(() => {
                         this.selectedProjectFilter = 'ALL';
@@ -559,7 +619,8 @@ class TaskTrackerView extends obsidian.ItemView {
             menu.addSeparator();
             this.allProjects.forEach(p => {
                 menu.addItem(item => {
-                    item.setTitle(`📂 ${p}`)
+                    item.setTitle(p)
+                        .setIcon('folder')
                         .setChecked(this.selectedProjectFilter === p)
                         .onClick(() => {
                             this.selectedProjectFilter = p;
@@ -571,22 +632,50 @@ class TaskTrackerView extends obsidian.ItemView {
         };
 
         const viewSwitcher = controls.createDiv({ cls: 'tt-view-switcher' });
-        const createViewTab = (mode, label, icon) => {
+        const createViewTab = (mode, label, iconKey) => {
             const tab = viewSwitcher.createEl('button', { 
-                cls: `tt-view-tab ${this.currentMode === mode ? 'is-active' : ''}`, 
-                text: `${icon} ${label}` 
+                cls: `tt-view-tab ${this.currentMode === mode ? 'is-active' : ''}`
             });
+            tab.innerHTML = `${renderIcon(iconKey)} <span>${label}</span>`;
             tab.onclick = () => {
                 this.currentMode = mode;
                 this.renderUI();
             };
         };
-        createViewTab('tree', 'Древо', '🌳');
-        createViewTab('kanban', 'Канбан', '📋');
-        createViewTab('calendar', 'Календарь', '📅');
+        createViewTab('tree', 'Древо', 'tree');
+        createViewTab('kanban', 'Канбан', 'kanban');
+        createViewTab('calendar', 'Календарь', 'calendar');
 
-        const btnAdd = controls.createEl('button', { text: '+ Задача', cls: 'mod-cta' });
-        const btnAddProj = controls.createEl('button', { text: '+ Проект' });
+        /* Кнопки "развернуть/свернуть все сабтаски" для всех видов */
+        const subtaskControls = controls.createDiv({ cls: 'tt-subtask-controls' });
+
+        const btnExpandAll = subtaskControls.createEl('button', {
+            cls: 'tt-icon-btn',
+            title: 'Развернуть все подзадачи'
+        });
+        btnExpandAll.innerHTML = `${renderIcon('expand')} <span>Развернуть все</span>`;
+        btnExpandAll.onclick = () => {
+            this.collapsedTasks.clear();
+            this.renderUI();
+        };
+
+        const btnCollapseAll = subtaskControls.createEl('button', {
+            cls: 'tt-icon-btn',
+            title: 'Свернуть все подзадачи'
+        });
+        btnCollapseAll.innerHTML = `${renderIcon('collapse')} <span>Свернуть все</span>`;
+        btnCollapseAll.onclick = () => {
+            this.tasks.forEach(t => {
+                if (t.hasChildren) this.collapsedTasks.add(t.lineIndex);
+            });
+            this.renderUI();
+        };
+
+        const btnAdd = controls.createEl('button', { cls: 'mod-cta tt-action-btn' });
+        btnAdd.innerHTML = `${renderIcon('plus')} <span>Задача</span>`;
+
+        const btnAddProj = controls.createEl('button', { cls: 'tt-action-btn' });
+        btnAddProj.innerHTML = `${renderIcon('plus')} <span>Проект</span>`;
 
         btnAdd.onclick = () => new AddTaskModal(this.app, this.plugin, () => this.refresh()).open();
         btnAddProj.onclick = () => new AddProjectModal(this.app, this.plugin, () => this.refresh()).open();
@@ -601,6 +690,7 @@ class TaskTrackerView extends obsidian.ItemView {
     renderKanban(parent) {
         const board = parent.createDiv({ cls: 'tt-kanban-board' });
         const filteredTasks = this.getFilteredTasks();
+        const tasksMap = this.getTasksMap();
 
         this.plugin.settings.statuses.forEach(status => {
             const col = board.createDiv({ cls: 'tt-kanban-column' });
@@ -631,7 +721,7 @@ class TaskTrackerView extends obsidian.ItemView {
                 }
             });
 
-            const colTasks = filteredTasks.filter(t => t.status === status.id);
+            const colTasks = filteredTasks.filter(t => t.status === status.id && !this.isTaskCollapsed(t, tasksMap));
 
             colTasks.forEach(task => {
                 const isSubtask = task.indentLevel > 0 || task.parentText;
@@ -648,7 +738,7 @@ class TaskTrackerView extends obsidian.ItemView {
                 });
 
                 card.onclick = (e) => {
-                    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON') {
+                    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON' && !e.target.closest('.tt-collapse-toggle')) {
                         TaskEngine.openAndHighlightTask(this.app, this.plugin.settings, task.lineIndex);
                     }
                 };
@@ -656,7 +746,7 @@ class TaskTrackerView extends obsidian.ItemView {
                 card.oncontextmenu = (e) => this.openTaskContextMenu(e, task);
 
                 const topMeta = card.createDiv({ cls: 'tt-card-top-meta' });
-                topMeta.createDiv({ cls: 'tt-card-project', text: `📁 ${task.project}` });
+                topMeta.createDiv({ cls: 'tt-card-project' }).innerHTML = `${renderIcon('folder')} ${task.project}`;
 
                 const pInfo = PRIORITY_LABELS[task.priority || 1];
                 const pBadge = topMeta.createSpan({ text: pInfo.badge, cls: `tt-priority-badge ${pInfo.class}` });
@@ -666,40 +756,76 @@ class TaskTrackerView extends obsidian.ItemView {
                     card.createDiv({ cls: 'tt-subtask-indicator', text: `↳ ${task.parentText}` });
                 }
 
-                card.createDiv({ text: task.text, cls: 'tt-card-title' });
+                const titleRow = card.createDiv({ cls: 'tt-card-title-row' });
+
+                if (task.hasChildren) {
+                    const isCollapsed = this.collapsedTasks.has(task.lineIndex);
+                    const toggleBtn = titleRow.createSpan({ cls: 'tt-collapse-toggle' });
+                    toggleBtn.innerHTML = renderIcon(isCollapsed ? 'chevronRightSmall' : 'chevronDown');
+                    toggleBtn.title = isCollapsed ? 'Развернуть подзадачи' : 'Свернуть подзадачи';
+                    toggleBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        if (isCollapsed) {
+                            this.collapsedTasks.delete(task.lineIndex);
+                        } else {
+                            this.collapsedTasks.add(task.lineIndex);
+                        }
+                        this.renderUI();
+                    };
+                }
+
+                titleRow.createSpan({ text: task.text, cls: 'tt-card-title-text' });
 
                 const datesDiv = card.createDiv({ cls: 'tt-card-dates' });
-                if (task.startDate) datesDiv.createDiv({ cls: 'tt-date-tag', text: `🛫 ${task.startDate}` });
-                if (task.dueDate) datesDiv.createDiv({ cls: 'tt-date-tag', text: `📅 ${task.dueDate}` });
-                if (task.completionDate) datesDiv.createDiv({ cls: 'tt-date-tag', text: `✅ ${task.completionDate}` });
+                if (task.startDate) datesDiv.createDiv({ cls: 'tt-date-tag' }).innerHTML = `${renderIcon('start')} ${task.startDate}`;
+                if (task.dueDate) datesDiv.createDiv({ cls: 'tt-date-tag' }).innerHTML = `${renderIcon('calendar')} ${task.dueDate}`;
+                if (task.completionDate) datesDiv.createDiv({ cls: 'tt-date-tag' }).innerHTML = `${renderIcon('check')} ${task.completionDate}`;
             });
         });
     }
 
     renderTree(parent) {
         const toolbar = parent.createDiv({ cls: 'tt-tree-toolbar' });
-        const toggleBtn = toolbar.createEl('button', { 
-            text: `📌 Статус: ${this.treeStatusPosition === 'end' ? 'В конце строки' : 'Рядом с текстом'}` 
-        });
+        const toggleBtn = toolbar.createEl('button', { cls: 'tt-icon-btn' });
+        toggleBtn.innerHTML = `${renderIcon('sliders')} <span>Статус: ${this.treeStatusPosition === 'end' ? 'В конце строки' : 'Рядом с текстом'}</span>`;
         toggleBtn.onclick = () => {
             this.treeStatusPosition = this.treeStatusPosition === 'end' ? 'inline' : 'end';
             this.renderUI();
         };
 
         const filteredTasks = this.getFilteredTasks();
-        const projects = Array.from(new Set(filteredTasks.map(t => t.project)));
+        const tasksMap = this.getTasksMap();
+        const visibleTasks = filteredTasks.filter(t => !this.isTaskCollapsed(t, tasksMap));
+        const projects = Array.from(new Set(visibleTasks.map(t => t.project)));
 
         projects.forEach(proj => {
             const block = parent.createDiv({ cls: 'tt-project-block' });
-            block.createEl('h4', { text: `📂 ${proj}`, cls: 'tt-project-title' });
+            const projTitle = block.createEl('h4', { cls: 'tt-project-title' });
+            projTitle.innerHTML = `${renderIcon('folder')} ${proj}`;
 
-            const projTasks = filteredTasks.filter(t => t.project === proj);
+            const projTasks = visibleTasks.filter(t => t.project === proj);
             const activeTasks = projTasks.filter(t => !t.completed);
             const doneTasks = projTasks.filter(t => t.completed);
 
             const renderTaskItem = (task, isDone = false) => {
                 const item = block.createDiv({ cls: `tt-task-item ${isDone ? 'tt-task-item-done' : ''}` });
                 item.style.marginLeft = `${task.indentLevel * 12}px`;
+
+                if (task.hasChildren) {
+                    const isCollapsed = this.collapsedTasks.has(task.lineIndex);
+                    const toggleBtn = item.createSpan({ cls: 'tt-collapse-toggle' });
+                    toggleBtn.innerHTML = renderIcon(isCollapsed ? 'chevronRightSmall' : 'chevronDown');
+                    toggleBtn.title = isCollapsed ? 'Развернуть подзадачи' : 'Свернуть подзадачи';
+                    toggleBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        if (isCollapsed) {
+                            this.collapsedTasks.delete(task.lineIndex);
+                        } else {
+                            this.collapsedTasks.add(task.lineIndex);
+                        }
+                        this.renderUI();
+                    };
+                }
 
                 const check = item.createEl('input', { type: 'checkbox' });
                 check.checked = task.completed;
@@ -722,12 +848,12 @@ class TaskTrackerView extends obsidian.ItemView {
                         badge.style.backgroundColor = stConfig.color;
                     }
                     item.createSpan({ text: task.text, cls: 'tt-task-text' });
-                    if (task.dueDate) item.createSpan({ cls: 'tt-date-tag', text: `📅 ${task.dueDate}` });
-                    if (task.completionDate) item.createSpan({ cls: 'tt-date-tag', text: `✅ ${task.completionDate}` });
+                    if (task.dueDate) item.createSpan({ cls: 'tt-date-tag' }).innerHTML = `${renderIcon('calendar')} ${task.dueDate}`;
+                    if (task.completionDate) item.createSpan({ cls: 'tt-date-tag' }).innerHTML = `${renderIcon('check')} ${task.completionDate}`;
                 } else {
                     item.createSpan({ text: task.text, cls: 'tt-task-text' });
-                    if (task.dueDate) item.createSpan({ cls: 'tt-date-tag', text: `📅 ${task.dueDate}` });
-                    if (task.completionDate) item.createSpan({ cls: 'tt-date-tag', text: `✅ ${task.completionDate}` });
+                    if (task.dueDate) item.createSpan({ cls: 'tt-date-tag' }).innerHTML = `${renderIcon('calendar')} ${task.dueDate}`;
+                    if (task.completionDate) item.createSpan({ cls: 'tt-date-tag' }).innerHTML = `${renderIcon('check')} ${task.completionDate}`;
                     if (stConfig) {
                         const badge = item.createSpan({ text: stConfig.label, cls: 'tt-status-badge' });
                         badge.style.backgroundColor = stConfig.color;
@@ -735,7 +861,7 @@ class TaskTrackerView extends obsidian.ItemView {
                 }
 
                 item.onclick = (e) => {
-                    if (e.target !== check) {
+                    if (e.target !== check && !e.target.closest('.tt-collapse-toggle')) {
                         TaskEngine.openAndHighlightTask(this.app, this.plugin.settings, task.lineIndex);
                     }
                 };
@@ -856,17 +982,43 @@ class TaskTrackerView extends obsidian.ItemView {
     renderCalendar(parent) {
         const calendarContainer = parent.createDiv({ cls: 'tt-calendar-container' });
         const filteredTasks = this.getFilteredTasks();
+        const tasksMap = this.getTasksMap();
 
         const sidebar = calendarContainer.createDiv({ cls: 'tt-unscheduled-sidebar' });
-        const unscheduledTasks = filteredTasks.filter(t => !t.startDate && !t.dueDate);
-        sidebar.createEl('h4', { text: `📋 Без даты (${unscheduledTasks.length})` });
+        
+        const sidebarHeader = sidebar.createDiv({ cls: 'tt-unscheduled-header' });
+        const hideDone = this.plugin.settings.hideDoneUnscheduled;
+
+        let unscheduledTasks = filteredTasks.filter(t => !t.startDate && !t.dueDate);
+        if (hideDone) {
+            unscheduledTasks = unscheduledTasks.filter(t => !t.completed && t.status !== this.plugin.settings.doneStatusId);
+        }
+
+        const visibleUnscheduled = unscheduledTasks.filter(t => !this.isTaskCollapsed(t, tasksMap));
+
+        const sideTitle = sidebarHeader.createEl('h4');
+        sideTitle.innerHTML = `${renderIcon('list')} Без даты (${visibleUnscheduled.length})`;
+
+        const toggleHideBtn = sidebarHeader.createEl('button', {
+            cls: `tt-icon-btn ${hideDone ? 'is-active' : ''}`,
+            title: hideDone ? 'Показать все задачи' : 'Скрыть выполненные задачи'
+        });
+        toggleHideBtn.innerHTML = hideDone
+            ? `${renderIcon('eyeOff')} <span>Скрыты</span>`
+            : `${renderIcon('eye')} <span>Все</span>`;
+
+        toggleHideBtn.onclick = async () => {
+            this.plugin.settings.hideDoneUnscheduled = !this.plugin.settings.hideDoneUnscheduled;
+            await this.plugin.saveSettings();
+            this.renderUI();
+        };
 
         const unscheduledList = sidebar.createDiv({ cls: 'tt-unscheduled-list' });
-        unscheduledTasks.forEach(task => {
+        visibleUnscheduled.forEach(task => {
             const card = unscheduledList.createDiv({ cls: 'tt-unscheduled-card' });
 
             const topRow = card.createDiv({ cls: 'tt-unscheduled-card-top' });
-            topRow.createDiv({ cls: 'tt-card-project', text: `📁 ${task.project}` });
+            topRow.createDiv({ cls: 'tt-card-project' }).innerHTML = `${renderIcon('folder')} ${task.project}`;
 
             const badgesDiv = topRow.createDiv({ cls: 'tt-card-badges' });
             const stConfig = this.plugin.settings.statuses.find(s => s.id === task.status);
@@ -882,12 +1034,30 @@ class TaskTrackerView extends obsidian.ItemView {
                 card.createDiv({ cls: 'tt-subtask-indicator', text: `↳ ${task.parentText}` });
             }
 
-            card.createDiv({ cls: 'tt-unscheduled-card-text', text: task.text });
+            const titleRow = card.createDiv({ cls: 'tt-card-title-row' });
+
+            if (task.hasChildren) {
+                const isCollapsed = this.collapsedTasks.has(task.lineIndex);
+                const toggleBtn = titleRow.createSpan({ cls: 'tt-collapse-toggle' });
+                toggleBtn.innerHTML = renderIcon(isCollapsed ? 'chevronRightSmall' : 'chevronDown');
+                toggleBtn.title = isCollapsed ? 'Развернуть подзадачи' : 'Свернуть подзадачи';
+                toggleBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    if (isCollapsed) {
+                        this.collapsedTasks.delete(task.lineIndex);
+                    } else {
+                        this.collapsedTasks.add(task.lineIndex);
+                    }
+                    this.renderUI();
+                };
+            }
+
+            titleRow.createSpan({ cls: 'tt-unscheduled-card-text', text: task.text });
 
             this.attachTaskDragEvents(card, task);
 
             card.onclick = (e) => {
-                if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON') {
+                if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON' && !e.target.closest('.tt-collapse-toggle')) {
                     TaskEngine.openAndHighlightTask(this.app, this.plugin.settings, task.lineIndex);
                 }
             };
@@ -898,12 +1068,16 @@ class TaskTrackerView extends obsidian.ItemView {
         const mainArea = calendarContainer.createDiv({ cls: 'tt-calendar-main' });
 
         const nav = mainArea.createDiv({ cls: 'tt-calendar-nav' });
-        const prevBtn = nav.createEl('button', { text: '◀' });
+        
+        const navLeft = nav.createDiv({ cls: 'tt-calendar-nav-left' });
+        const prevBtn = navLeft.createEl('button', { cls: 'tt-icon-btn' });
+        prevBtn.innerHTML = renderIcon('chevronLeft');
 
         const monthNames = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
-        nav.createSpan({ text: `${monthNames[this.calendarMonth]} ${this.calendarYear}`, cls: 'tt-calendar-nav-title' });
+        navLeft.createSpan({ text: `${monthNames[this.calendarMonth]} ${this.calendarYear}`, cls: 'tt-calendar-nav-title' });
 
-        const nextBtn = nav.createEl('button', { text: '▶' });
+        const nextBtn = navLeft.createEl('button', { cls: 'tt-icon-btn' });
+        nextBtn.innerHTML = renderIcon('chevronRight');
 
         prevBtn.onclick = () => {
             this.calendarMonth--;
@@ -930,14 +1104,16 @@ class TaskTrackerView extends obsidian.ItemView {
         const weeksGrid = mainArea.createDiv({ cls: 'tt-calendar-weeks-grid' });
 
         const scheduledTasks = filteredTasks.filter(t => t.startDate || t.dueDate);
+        const todayStr = formatDate(new Date());
 
         weeks.forEach(weekDays => {
             const weekRow = weeksGrid.createDiv({ cls: 'tt-calendar-week-row' });
             const bgGrid = weekRow.createDiv({ cls: 'tt-week-days-bg' });
 
             weekDays.forEach((dayInfo) => {
+                const isToday = dayInfo.dateStr === todayStr;
                 const dayCell = bgGrid.createDiv({
-                    cls: `tt-calendar-day ${!dayInfo.isCurrentMonth ? 'tt-other-month' : ''}`
+                    cls: `tt-calendar-day ${!dayInfo.isCurrentMonth ? 'tt-other-month' : ''} ${isToday ? 'tt-today' : ''}`
                 });
                 dayCell.dataset.date = dayInfo.dateStr;
                 dayCell.createDiv({ text: `${dayInfo.dayNum}`, cls: 'tt-day-number' });
@@ -1031,7 +1207,11 @@ class TaskTrackerView extends obsidian.ItemView {
                 const stConfig = this.plugin.settings.statuses.find(s => s.id === task.status);
                 const barColor = stConfig ? stConfig.color : 'var(--interactive-accent)';
 
-                const bar = tasksLayer.createDiv({ cls: 'tt-calendar-bar' });
+                const isDone = task.completed || task.status === this.plugin.settings.doneStatusId;
+                const barClasses = ['tt-calendar-bar'];
+                if (isDone) barClasses.push('tt-bar-completed');
+
+                const bar = tasksLayer.createDiv({ cls: barClasses.join(' ') });
                 bar.style.gridColumn = `${startCol} / span ${colSpan}`;
                 bar.style.gridRow = `${rowIndex}`;
                 bar.style.backgroundColor = barColor;
@@ -1334,7 +1514,6 @@ class TaskTrackerSettingTab extends obsidian.PluginSettingTab {
         containerEl.empty();
         containerEl.createEl('h2', { text: 'Настройки Task Tracker' });
 
-        // Выбор мастер-файла с автодополнением (FileSuggest)
         new obsidian.Setting(containerEl)
             .setName('Мастер-файл заметок')
             .setDesc('Путь к файлу, где хранятся задачи (начните ввод для автопоиска по хранилищу)')
@@ -1347,7 +1526,6 @@ class TaskTrackerSettingTab extends obsidian.PluginSettingTab {
                 new FileSuggest(this.app, text.inputEl);
             });
 
-        // Настройка горячей клавиши
         new obsidian.Setting(containerEl)
             .setName('Горячая клавиша: Быстрое создание задачи')
             .setDesc('По умолчанию назначен хоткей Ctrl+Alt+T (Cmd+Option+T). Нажмите для переназначения в меню Obsidian.')
@@ -1376,6 +1554,16 @@ class TaskTrackerSettingTab extends obsidian.PluginSettingTab {
                 });
             });
 
+        new obsidian.Setting(containerEl)
+            .setName('Скрывать выполненные в разделе "Без даты"')
+            .setDesc('Не отображать завершенные задачи в боковой панели незапланированных задач')
+            .addToggle(toggle => toggle
+                .setValue(this.plugin.settings.hideDoneUnscheduled)
+                .onChange(async (val) => {
+                    this.plugin.settings.hideDoneUnscheduled = val;
+                    await this.plugin.saveSettings();
+                }));
+
         containerEl.createEl('h3', { text: 'Порядок и редактор статусов (Drag & Drop)' });
 
         let draggedIndex = null;
@@ -1385,7 +1573,8 @@ class TaskTrackerSettingTab extends obsidian.PluginSettingTab {
             const item = listContainer.createDiv({ cls: 'tt-status-settings-item' });
             item.setAttribute('draggable', 'true');
 
-            item.createSpan({ text: '☰', cls: 'tt-drag-handle' });
+            const dragSpan = item.createSpan({ cls: 'tt-drag-handle' });
+            dragSpan.innerHTML = renderIcon('grip');
 
             const idInput = item.createEl('input', { type: 'text', value: status.id, placeholder: 'ID' });
             idInput.style.width = '80px';
@@ -1440,7 +1629,8 @@ class TaskTrackerSettingTab extends obsidian.PluginSettingTab {
                 this.display();
             };
 
-            const delBtn = item.createEl('button', { text: '❌' });
+            const delBtn = item.createEl('button', { cls: 'tt-icon-btn' });
+            delBtn.innerHTML = renderIcon('trash');
             delBtn.onclick = async () => {
                 this.plugin.settings.statuses.splice(idx, 1);
                 await this.plugin.saveSettings();
@@ -1500,7 +1690,6 @@ class TaskTrackerPlugin extends obsidian.Plugin {
             callback: () => this.activateView()
         });
 
-        // Команда для быстрого создания задачи через хоткей
         this.addCommand({
             id: 'quick-add-task',
             name: 'Быстрое создание задачи',

@@ -23,6 +23,9 @@
 .task-tracker-header h3 {
     margin: 0;
     font-size: 1.2em;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .task-tracker-controls {
@@ -35,6 +38,28 @@
     padding: 4px 10px;
     border-radius: 4px;
     cursor: pointer;
+}
+
+/* Иконки в стиле Notion */
+.tt-notion-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+
+/* Кнопки массового сворачивания/разворачивания сабтасков */
+.tt-subtask-controls {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.tt-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
 }
 
 /* ==================== СЕГМЕНТИРОВАННЫЙ ПЕРЕКЛЮЧАТЕЛЬ ВИДОВ ==================== */
@@ -57,6 +82,9 @@
     font-size: 0.85em;
     font-weight: 500;
     transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .tt-view-tab:hover {
@@ -103,7 +131,7 @@
     flex-direction: column;
 }
 
-/* ==================== ИНДИКАТОРЫ ПРИОРИТЕТОВ ==================== */
+/* ==================== ИНДИКАТОРЫ ПРИОРИТЕТОВ И КНОПКИ СВЕРТЫВАНИЯ ==================== */
 
 .tt-priority-badge {
     font-size: 0.7em;
@@ -121,13 +149,36 @@
 .tt-p4 { background-color: #e67e22; } /* Оранжевый */
 .tt-p5 { background-color: #e74c3c; font-weight: 900; } /* Красный */
 
-.tt-card-top-meta {
-    display: flex;
-    justify-content: space-between;
+.tt-collapse-toggle {
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.8em;
+    color: var(--text-muted);
+    padding: 2px;
+    display: inline-flex;
     align-items: center;
+    justify-content: center;
+    transition: color 0.15s ease, background-color 0.15s ease;
+    border-radius: 3px;
 }
 
-.tt-unscheduled-card-top {
+.tt-collapse-toggle:hover {
+    color: var(--interactive-accent);
+    background-color: var(--background-modifier-hover);
+}
+
+.tt-card-title-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+.tt-card-title-text, .tt-unscheduled-card-text {
+    flex: 1;
+    word-break: break-word;
+}
+
+.tt-card-top-meta, .tt-unscheduled-card-top {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -211,6 +262,9 @@
     font-weight: bold;
     color: var(--text-muted);
     text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }
 
 .tt-card-dates {
@@ -234,6 +288,9 @@
     margin: 0 0 10px 0;
     padding-bottom: 4px;
     border-bottom: 1px solid var(--background-modifier-border);
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .tt-task-item {
@@ -279,6 +336,9 @@
     padding: 2px 6px;
     border-radius: 4px;
     color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }
 
 /* ==================== РЕЖИМ "КАЛЕНДАРЬ" ==================== */
@@ -299,8 +359,44 @@
     gap: 10px;
 }
 
-.tt-unscheduled-sidebar h4 {
-    margin: 0 0 8px 0;
+.tt-unscheduled-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2px;
+}
+
+.tt-unscheduled-header h4 {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tt-icon-btn {
+    background: transparent;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    padding: 3px 8px;
+    cursor: pointer;
+    font-size: 0.8em;
+    color: var(--text-muted);
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.tt-icon-btn:hover {
+    color: var(--text-normal);
+    background: var(--background-modifier-hover);
+    border-color: var(--interactive-accent);
+}
+
+.tt-icon-btn.is-active {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+    border-color: var(--interactive-accent);
 }
 
 .tt-unscheduled-list {
@@ -333,6 +429,7 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+    min-height: 0;
 }
 
 .tt-calendar-nav {
@@ -340,6 +437,12 @@
     align-items: center;
     justify-content: space-between;
     padding: 4px 0;
+}
+
+.tt-calendar-nav-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .tt-calendar-nav-title {
@@ -361,14 +464,17 @@
     flex-direction: column;
     gap: 6px;
     flex: 1;
+    overflow-y: auto;
+    padding-right: 4px;
+    min-height: 0;
 }
 
 .tt-calendar-week-row {
     position: relative;
     display: flex;
     flex-direction: column;
-    flex: 1;
-    min-height: 120px;
+    flex: 1 0 auto;
+    min-height: 110px;
 }
 
 .tt-week-days-bg {
@@ -389,10 +495,24 @@
     border: 2px dashed transparent;
     transition: background-color 0.2s ease, border-color 0.2s ease;
     position: relative;
+    height: 100%;
+    box-sizing: border-box;
 }
 
 .tt-calendar-day.tt-other-month {
     opacity: 0.35;
+}
+
+/* Один контур ячейки и цветной текст числа для текущего дня */
+.tt-calendar-day.tt-today {
+    border: 2px solid var(--interactive-accent);
+    background-color: var(--background-primary-alt);
+    box-shadow: inset 0 0 0 1px var(--interactive-accent);
+}
+
+.tt-calendar-day.tt-today .tt-day-number {
+    color: var(--interactive-accent);
+    font-weight: 800;
 }
 
 .tt-day-number {
@@ -400,7 +520,7 @@
     font-weight: 700;
     color: var(--text-muted);
     user-select: none;
-    margin-bottom: 24px;
+    line-height: 1;
 }
 
 .tt-calendar-day.tt-day-drag-over {
@@ -418,6 +538,7 @@ body.tt-resizing-active .tt-calendar-bar {
     pointer-events: none !important;
 }
 
+/* Слой плашек задач с динамическим расширением */
 .tt-week-tasks-layer {
     position: relative;
     z-index: 2;
@@ -425,10 +546,12 @@ body.tt-resizing-active .tt-calendar-bar {
     grid-template-columns: repeat(7, 1fr);
     gap: 6px;
     padding-top: 28px;
+    padding-bottom: 6px;
     grid-auto-rows: 24px;
     row-gap: 4px;
     pointer-events: none;
     flex: 1;
+    min-height: 110px;
 }
 
 .tt-calendar-bar {
@@ -448,6 +571,11 @@ body.tt-resizing-active .tt-calendar-bar {
     overflow: hidden;
     height: 24px;
     padding: 0 4px;
+}
+
+.tt-calendar-bar.tt-bar-completed {
+    opacity: 0.65;
+    text-decoration: line-through;
 }
 
 .tt-calendar-bar:hover {
@@ -507,7 +635,7 @@ body.tt-resizing-active .tt-calendar-bar {
     z-index: 9999;
 }
 
-/* ==================== СТИЛИ МОДАЛКИ И ПРЕСЕТОВ ДАТ ==================== */
+/* ==================== МОДАЛКА И НАСТРОЙКИ ==================== */
 
 .tt-modal-date-picker {
     display: flex;
@@ -548,8 +676,6 @@ body.tt-resizing-active .tt-calendar-bar {
     color: var(--text-on-accent);
     border-color: var(--interactive-accent);
 }
-
-/* ==================== НАСТРОЙКИ: ПАСТЕЛЬНЫЕ ЧИПЫ И ЦВЕТА ==================== */
 
 .tt-status-settings-list {
     display: flex;
@@ -602,4 +728,6 @@ body.tt-resizing-active .tt-calendar-bar {
 .tt-drag-handle {
     cursor: grab;
     color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
 }
