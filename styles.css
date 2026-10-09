@@ -215,12 +215,22 @@
     gap: 10px;
     overflow-y: auto;
     border: 2px dashed transparent;
-    transition: border-color 0.2s ease;
+    transition: border-color 0.2s ease, transform 0.15s ease;
 }
 
 .tt-kanban-column.tt-drag-over {
     border-color: var(--interactive-accent);
     background: var(--background-secondary-alt);
+}
+
+.tt-kanban-column.tt-column-drag-over {
+    border-color: var(--interactive-accent);
+    transform: scale(0.98);
+}
+
+.tt-kanban-column.tt-column-is-dragging {
+    opacity: 0.4;
+    border-color: var(--interactive-accent);
 }
 
 .tt-kanban-column-header {
@@ -229,6 +239,102 @@
     padding-bottom: 6px;
     border-bottom: 3px solid var(--interactive-accent);
     margin-bottom: 6px;
+    user-select: none;
+}
+
+.tt-kanban-header-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    gap: 6px;
+}
+
+.tt-column-drag-handle {
+    cursor: grab;
+    opacity: 0.6;
+}
+
+.tt-column-drag-handle:hover {
+    opacity: 1;
+}
+
+.tt-kanban-title-text {
+    font-weight: bold;
+    flex: 1;
+}
+
+.tt-done-status-badge {
+    font-size: 0.65em;
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.tt-temp-status-badge {
+    font-size: 0.65em;
+    background-color: #e67e22;
+    color: #fff;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.tt-temp-badge-inline {
+    font-size: 0.75em;
+    color: #e67e22;
+    font-weight: bold;
+    margin-left: 4px;
+}
+
+.tt-kanban-header-actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.tt-header-action-btn {
+    padding: 2px 4px;
+    font-size: 0.75em;
+    opacity: 0.7;
+    border: none;
+}
+
+.tt-header-action-btn:hover {
+    opacity: 1;
+    background: var(--background-modifier-hover);
+}
+
+.tt-add-status-column {
+    justify-content: center;
+    align-items: center;
+    min-width: 180px;
+    border: 2px dashed var(--background-modifier-border);
+    background: transparent;
+}
+
+.tt-add-status-column:hover {
+    border-color: var(--interactive-accent);
+}
+
+.tt-add-status-column-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.tt-add-status-column-btn:hover {
+    color: var(--interactive-accent);
 }
 
 .tt-kanban-card {
@@ -278,6 +384,9 @@
 
 .tt-tree-toolbar {
     margin-bottom: 12px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
 }
 
 .tt-project-block {
@@ -321,6 +430,13 @@
     border-radius: 10px;
     color: #fff;
     font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.1s ease, filter 0.1s ease;
+}
+
+.tt-status-badge:hover {
+    transform: scale(1.05);
+    filter: brightness(1.1);
 }
 
 .tt-done-divider {
@@ -730,4 +846,65 @@ body.tt-resizing-active .tt-calendar-bar {
     color: var(--text-muted);
     display: inline-flex;
     align-items: center;
+}
+
+/* ==================== СТИЛИ МОДАЛКИ ПОДТВЕРЖДЕНИЯ УДАЛЕНИЯ ==================== */
+
+.tt-delete-warning-box {
+    background-color: rgba(231, 76, 60, 0.12);
+    border-left: 4px solid #e74c3c;
+    padding: 10px 14px;
+    border-radius: 4px;
+    margin-bottom: 16px;
+}
+
+.tt-delete-warning-box p {
+    margin: 0;
+    color: var(--text-normal);
+    font-weight: 500;
+}
+
+.tt-delete-radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 12px 0 18px 0;
+    padding: 12px;
+    background: var(--background-secondary);
+    border-radius: 6px;
+}
+
+.tt-radio-option {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.tt-radio-option:hover {
+    background-color: var(--background-modifier-hover);
+}
+
+.tt-radio-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 0.95em;
+    font-weight: 500;
+}
+
+.tt-radio-desc {
+    margin-left: 24px;
+    font-size: 0.82em;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+.tt-delete-radio-group select {
+    margin-left: 24px;
+    max-width: 200px;
 }

@@ -31,7 +31,7 @@ const PASTEL_COLORS = [
     '#4ba3e3', '#42b883', '#f39c12', '#e74c3c'
 ];
 
-/* Минималистичные иконки в стиле Notion */
+/* Иконки в стиле Notion */
 const NOTION_ICONS = {
     target: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="4"></circle></svg>',
     folder: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>',
@@ -305,6 +305,44 @@ class TaskEngine {
         await app.vault.modify(file, lines.join('\n'));
     }
 
+    static async updateMultipleTasksStatus(app, settings, tasks, newStatus) {
+        const file = app.vault.getAbstractFileByPath(settings.masterFilePath);
+        if (!(file instanceof obsidian.TFile)) return;
+
+        const content = await app.vault.read(file);
+        const lines = content.split('\n');
+        const isDone = newStatus === settings.doneStatusId;
+
+        tasks.forEach(task => {
+            let line = lines[task.lineIndex];
+            if (!line) return;
+
+            const checkChar = isDone ? 'x' : (newStatus === 'in_progress' ? '/' : ' ');
+            line = line.replace(/^((\s*)-\s*\[)(.)(\])/, `$1${checkChar}$4`);
+
+            const statusRegex = new RegExp(`${escapeRegExp(settings.statusPrefix)}[\\w_-]+`, 'i');
+            const newTag = `${settings.statusPrefix}${newStatus}`;
+
+            if (statusRegex.test(line)) {
+                line = line.replace(statusRegex, newTag);
+            } else {
+                line = `${line} ${newTag}`;
+            }
+
+            const compRegex = new RegExp(`\\s*${escapeRegExp(settings.completionDatePrefix)}\\d{4}-\\d{2}-\\d{2}`, 'gi');
+            line = line.replace(compRegex, '');
+
+            if (isDone) {
+                const todayStr = formatDateOffset(0);
+                line = `${line} ${settings.completionDatePrefix}${todayStr}`;
+            }
+
+            lines[task.lineIndex] = line;
+        });
+
+        await app.vault.modify(file, lines.join('\n'));
+    }
+
     static async updateTaskPriority(app, settings, task, newPriority) {
         const file = app.vault.getAbstractFileByPath(settings.masterFilePath);
         if (!(file instanceof obsidian.TFile)) return;
@@ -436,7 +474,7 @@ class TaskTrackerView extends obsidian.ItemView {
     constructor(leaf, plugin) {
         super(leaf);
         this.plugin = plugin;
-        this.currentMode = 'calendar';
+        this.currentMode = 'kanban';
         this.selectedProjectFilter = 'ALL';
         this.treeStatusPosition = 'end';
         this.collapsedTasks = new Set();
@@ -444,6 +482,7 @@ class TaskTrackerView extends obsidian.ItemView {
         this.allProjects = [];
         this.calendarYear = new Date().getFullYear();
         this.calendarMonth = new Date().getMonth();
+        this.draggedColumnIndex = null;
     }
 
     getViewType() { return 'custom-task-tracker-view'; }
@@ -464,7 +503,29 @@ class TaskTrackerView extends obsidian.ItemView {
     async refresh() {
         this.tasks = await TaskEngine.parseMasterFile(this.app, this.plugin.settings);
         this.allProjects = await TaskEngine.getAllProjects(this.app, this.plugin.settings);
+        await this.cleanupTemporaryStatuses();
         this.renderUI();
+    }
+
+    async cleanupTemporaryStatuses() {
+        let changed = false;
+        const remainingStatuses = [];
+
+        for (const st of this.plugin.settings.statuses) {
+            if (st.isTemporary) {
+                const tasksInStatus = this.tasks.filter(t => t.status === st.id);
+                if (tasksInStatus.length === 0) {
+                    changed = true;
+                    continue; // Удаляем пустой временный статус
+                }
+            }
+            remainingStatuses.push(st);
+        }
+
+        if (changed) {
+            this.plugin.settings.statuses = remainingStatuses;
+            await this.plugin.saveSettings();
+        }
     }
 
     getFilteredTasks() {
@@ -509,6 +570,21 @@ class TaskTrackerView extends obsidian.ItemView {
                             await this.refresh();
                         });
                 });
+            });
+            subMenu.addSeparator();
+            subMenu.addItem(sub => {
+                sub.setTitle('+ Добавить новый статус...')
+                    .setIcon('plus')
+                    .onClick(() => {
+                        new EditStatusModal(this.app, this.plugin, null, () => this.refresh()).open();
+                    });
+            });
+            subMenu.addItem(sub => {
+                sub.setTitle('Управление статусами...')
+                    .setIcon('sliders')
+                    .onClick(() => {
+                        new ManageStatusesModal(this.app, this.plugin, () => this.refresh()).open();
+                    });
             });
         });
 
@@ -646,7 +722,6 @@ class TaskTrackerView extends obsidian.ItemView {
         createViewTab('kanban', 'Канбан', 'kanban');
         createViewTab('calendar', 'Календарь', 'calendar');
 
-        /* Кнопки "развернуть/свернуть все сабтаски" для всех видов */
         const subtaskControls = controls.createDiv({ cls: 'tt-subtask-controls' });
 
         const btnExpandAll = subtaskControls.createEl('button', {
@@ -671,6 +746,10 @@ class TaskTrackerView extends obsidian.ItemView {
             this.renderUI();
         };
 
+        const btnManageStatuses = controls.createEl('button', { cls: 'tt-action-btn', title: 'Управление статусами' });
+        btnManageStatuses.innerHTML = `${renderIcon('sliders')} <span>Статусы</span>`;
+        btnManageStatuses.onclick = () => new ManageStatusesModal(this.app, this.plugin, () => this.refresh()).open();
+
         const btnAdd = controls.createEl('button', { cls: 'mod-cta tt-action-btn' });
         btnAdd.innerHTML = `${renderIcon('plus')} <span>Задача</span>`;
 
@@ -692,32 +771,103 @@ class TaskTrackerView extends obsidian.ItemView {
         const filteredTasks = this.getFilteredTasks();
         const tasksMap = this.getTasksMap();
 
-        this.plugin.settings.statuses.forEach(status => {
+        this.plugin.settings.statuses.forEach((status, idx) => {
             const col = board.createDiv({ cls: 'tt-kanban-column' });
+            col.setAttribute('draggable', 'true');
+
+            col.addEventListener('dragstart', (e) => {
+                if (e.target !== col) return;
+                this.draggedColumnIndex = idx;
+                col.addClass('tt-column-is-dragging');
+                e.dataTransfer.setData('text/kanban-column', idx.toString());
+            });
+
+            col.addEventListener('dragend', () => {
+                col.removeClass('tt-column-is-dragging');
+                this.draggedColumnIndex = null;
+            });
+
             const colHeader = col.createDiv({ cls: 'tt-kanban-column-header' });
-            colHeader.createSpan({ text: status.label });
             colHeader.style.borderBottomColor = status.color;
+
+            const headerTitleRow = colHeader.createDiv({ cls: 'tt-kanban-header-title-row' });
+            
+            const dragGrip = headerTitleRow.createSpan({ cls: 'tt-drag-handle tt-column-drag-handle', title: 'Перетащите колонку' });
+            dragGrip.innerHTML = renderIcon('grip');
+
+            headerTitleRow.createSpan({ text: status.label, cls: 'tt-kanban-title-text' });
+
+            if (status.isTemporary) {
+                const tempBadge = headerTitleRow.createSpan({ cls: 'tt-temp-status-badge', text: 'Временный' });
+                tempBadge.title = 'Этот статус удалится автоматически, когда в нем не останется задач';
+            } else if (status.id === this.plugin.settings.doneStatusId) {
+                const doneBadge = headerTitleRow.createSpan({ cls: 'tt-done-status-badge', text: 'Done' });
+                doneBadge.title = 'Этот статус отмечен как завершающий';
+            }
+
+            const headerActions = headerTitleRow.createDiv({ cls: 'tt-kanban-header-actions' });
+
+            const editBtn = headerActions.createEl('button', { cls: 'tt-icon-btn tt-header-action-btn', title: 'Редактировать статус' });
+            editBtn.innerHTML = renderIcon('sliders');
+            editBtn.onclick = (e) => {
+                e.stopPropagation();
+                new EditStatusModal(this.app, this.plugin, status, () => this.refresh()).open();
+            };
+
+            // Не позволяем удалять временный статус вручную
+            if (!status.isTemporary && this.plugin.settings.statuses.length > 1) {
+                const delBtn = headerActions.createEl('button', { cls: 'tt-icon-btn tt-header-action-btn', title: 'Удалить статус' });
+                delBtn.innerHTML = renderIcon('trash');
+                delBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    new DeleteStatusConfirmModal(this.app, this.plugin, status, () => this.refresh()).open();
+                };
+            }
 
             col.addEventListener('dragover', (e) => {
                 e.preventDefault();
-                col.addClass('tt-drag-over');
+                if (this.draggedColumnIndex !== null && this.draggedColumnIndex !== idx) {
+                    col.addClass('tt-column-drag-over');
+                } else {
+                    col.addClass('tt-drag-over');
+                }
             });
 
             col.addEventListener('dragleave', () => {
                 col.removeClass('tt-drag-over');
+                col.removeClass('tt-column-drag-over');
             });
 
             col.addEventListener('drop', async (e) => {
                 e.preventDefault();
                 col.removeClass('tt-drag-over');
-                const rawData = e.dataTransfer.getData('text/plain');
-                if (rawData) {
-                    const data = JSON.parse(rawData);
-                    const task = this.tasks.find(t => t.lineIndex === data.lineIndex);
-                    if (task && task.status !== status.id) {
-                        await TaskEngine.updateTaskStatus(this.app, this.plugin.settings, task, status.id);
+                col.removeClass('tt-column-drag-over');
+
+                const columnDragData = e.dataTransfer.getData('text/kanban-column');
+                if (columnDragData !== "" && this.draggedColumnIndex !== null) {
+                    const fromIndex = parseInt(columnDragData, 10);
+                    if (fromIndex !== idx) {
+                        const movedCol = this.plugin.settings.statuses.splice(fromIndex, 1)[0];
+                        this.plugin.settings.statuses.splice(idx, 0, movedCol);
+                        await this.plugin.saveSettings();
                         await this.refresh();
                     }
+                    this.draggedColumnIndex = null;
+                    return;
+                }
+
+                const rawData = e.dataTransfer.getData('text/plain');
+                if (rawData) {
+                    try {
+                        const data = JSON.parse(rawData);
+                        if (data.lineIndex !== undefined) {
+                            const task = this.tasks.find(t => t.lineIndex === data.lineIndex);
+                            if (task && task.status !== status.id) {
+                                await TaskEngine.updateTaskStatus(this.app, this.plugin.settings, task, status.id);
+                                await this.refresh();
+                            }
+                        }
+                    } catch (err) {}
                 }
             });
 
@@ -729,6 +879,7 @@ class TaskTrackerView extends obsidian.ItemView {
                 card.setAttribute('draggable', 'true');
 
                 card.addEventListener('dragstart', (e) => {
+                    e.stopPropagation();
                     e.dataTransfer.setData('text/plain', JSON.stringify({ lineIndex: task.lineIndex }));
                     card.style.opacity = '0.4';
                 });
@@ -782,6 +933,11 @@ class TaskTrackerView extends obsidian.ItemView {
                 if (task.completionDate) datesDiv.createDiv({ cls: 'tt-date-tag' }).innerHTML = `${renderIcon('check')} ${task.completionDate}`;
             });
         });
+
+        const addCol = board.createDiv({ cls: 'tt-kanban-column tt-add-status-column' });
+        const addBtn = addCol.createEl('button', { cls: 'tt-add-status-column-btn' });
+        addBtn.innerHTML = `${renderIcon('plus')} <span>Добавить статус</span>`;
+        addBtn.onclick = () => new EditStatusModal(this.app, this.plugin, null, () => this.refresh()).open();
     }
 
     renderTree(parent) {
@@ -792,6 +948,10 @@ class TaskTrackerView extends obsidian.ItemView {
             this.treeStatusPosition = this.treeStatusPosition === 'end' ? 'inline' : 'end';
             this.renderUI();
         };
+
+        const addStatusBtn = toolbar.createEl('button', { cls: 'tt-icon-btn' });
+        addStatusBtn.innerHTML = `${renderIcon('plus')} <span>Новый статус</span>`;
+        addStatusBtn.onclick = () => new EditStatusModal(this.app, this.plugin, null, () => this.refresh()).open();
 
         const filteredTasks = this.getFilteredTasks();
         const tasksMap = this.getTasksMap();
@@ -842,10 +1002,21 @@ class TaskTrackerView extends obsidian.ItemView {
 
                 const stConfig = this.plugin.settings.statuses.find(s => s.id === task.status);
 
+                const attachStatusBadgeEvents = (badge) => {
+                    badge.title = 'Нажмите для редактирования статуса';
+                    badge.onclick = (e) => {
+                        e.stopPropagation();
+                        if (stConfig) {
+                            new EditStatusModal(this.app, this.plugin, stConfig, () => this.refresh()).open();
+                        }
+                    };
+                };
+
                 if (this.treeStatusPosition === 'inline') {
                     if (stConfig) {
                         const badge = item.createSpan({ text: stConfig.label, cls: 'tt-status-badge' });
                         badge.style.backgroundColor = stConfig.color;
+                        attachStatusBadgeEvents(badge);
                     }
                     item.createSpan({ text: task.text, cls: 'tt-task-text' });
                     if (task.dueDate) item.createSpan({ cls: 'tt-date-tag' }).innerHTML = `${renderIcon('calendar')} ${task.dueDate}`;
@@ -857,11 +1028,12 @@ class TaskTrackerView extends obsidian.ItemView {
                     if (stConfig) {
                         const badge = item.createSpan({ text: stConfig.label, cls: 'tt-status-badge' });
                         badge.style.backgroundColor = stConfig.color;
+                        attachStatusBadgeEvents(badge);
                     }
                 }
 
                 item.onclick = (e) => {
-                    if (e.target !== check && !e.target.closest('.tt-collapse-toggle')) {
+                    if (e.target !== check && !e.target.closest('.tt-collapse-toggle') && !e.target.classList.contains('tt-status-badge')) {
                         TaskEngine.openAndHighlightTask(this.app, this.plugin.settings, task.lineIndex);
                     }
                 };
@@ -1025,6 +1197,11 @@ class TaskTrackerView extends obsidian.ItemView {
             if (stConfig) {
                 const stBadge = badgesDiv.createSpan({ text: stConfig.label, cls: 'tt-status-badge' });
                 stBadge.style.backgroundColor = stConfig.color;
+                stBadge.title = 'Нажмите для редактирования статуса';
+                stBadge.onclick = (e) => {
+                    e.stopPropagation();
+                    new EditStatusModal(this.app, this.plugin, stConfig, () => this.refresh()).open();
+                };
             }
             const pInfo = PRIORITY_LABELS[task.priority || 1];
             const pBadge = badgesDiv.createSpan({ text: pInfo.badge, cls: `tt-priority-badge ${pInfo.class}` });
@@ -1057,7 +1234,7 @@ class TaskTrackerView extends obsidian.ItemView {
             this.attachTaskDragEvents(card, task);
 
             card.onclick = (e) => {
-                if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON' && !e.target.closest('.tt-collapse-toggle')) {
+                if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON' && !e.target.closest('.tt-collapse-toggle') && !e.target.classList.contains('tt-status-badge')) {
                     TaskEngine.openAndHighlightTask(this.app, this.plugin.settings, task.lineIndex);
                 }
             };
@@ -1132,22 +1309,26 @@ class TaskTrackerView extends obsidian.ItemView {
                     dayCell.removeClass('tt-day-drag-over');
                     const rawData = e.dataTransfer.getData('text/plain');
                     if (rawData) {
-                        const data = JSON.parse(rawData);
-                        const task = this.tasks.find(t => t.lineIndex === data.lineIndex);
-                        if (task) {
-                            let newStart = dayInfo.dateStr;
-                            let newDue = dayInfo.dateStr;
+                        try {
+                            const data = JSON.parse(rawData);
+                            if (data.lineIndex !== undefined) {
+                                const task = this.tasks.find(t => t.lineIndex === data.lineIndex);
+                                if (task) {
+                                    let newStart = dayInfo.dateStr;
+                                    let newDue = dayInfo.dateStr;
 
-                            if (task.startDate && task.dueDate && task.startDate !== task.dueDate) {
-                                const durationDays = getDaysDiff(task.startDate, task.dueDate);
-                                if (durationDays > 0) {
-                                    newDue = addDaysToDateStr(newStart, durationDays);
+                                    if (task.startDate && task.dueDate && task.startDate !== task.dueDate) {
+                                        const durationDays = getDaysDiff(task.startDate, task.dueDate);
+                                        if (durationDays > 0) {
+                                            newDue = addDaysToDateStr(newStart, durationDays);
+                                        }
+                                    }
+
+                                    await TaskEngine.updateTaskDates(this.app, this.plugin.settings, task, newStart, newDue);
+                                    await this.refresh();
                                 }
                             }
-
-                            await TaskEngine.updateTaskDates(this.app, this.plugin.settings, task, newStart, newDue);
-                            await this.refresh();
-                        }
+                        } catch(err) {}
                     }
                 });
             });
@@ -1277,6 +1458,390 @@ class TaskTrackerView extends obsidian.ItemView {
         }
 
         return weeks;
+    }
+}
+
+class DeleteStatusConfirmModal extends obsidian.Modal {
+    constructor(app, plugin, statusToDelete, onSuccess) {
+        super(app);
+        this.plugin = plugin;
+        this.statusToDelete = statusToDelete;
+        this.onSuccess = onSuccess;
+    }
+
+    async onOpen() {
+        const { contentEl } = this;
+        contentEl.empty();
+
+        const allTasks = await TaskEngine.parseMasterFile(this.app, this.plugin.settings);
+        const tasksInStatus = allTasks.filter(t => t.status === this.statusToDelete.id);
+
+        if (tasksInStatus.length === 0) {
+            await this.deleteStatusDirectly();
+            this.close();
+            if (this.onSuccess) this.onSuccess();
+            return;
+        }
+
+        contentEl.createEl('h2', { text: `Удаление статуса "${this.statusToDelete.label}"` });
+
+        const warningDiv = contentEl.createDiv({ cls: 'tt-delete-warning-box' });
+        warningDiv.createEl('p', { 
+            text: `⚠️ Предупреждение: Вы собираетесь удалить статус, в котором сейчас находится ${tasksInStatus.length} задач(и)!` 
+        });
+
+        contentEl.createEl('p', { text: 'Выберите action, что сделать с этими задачами:' });
+
+        const otherStatuses = this.plugin.settings.statuses.filter(s => s.id !== this.statusToDelete.id);
+        let selectedAction = 'move';
+        let targetStatusId = otherStatuses[0]?.id || '';
+
+        const actionRadioGroup = contentEl.createDiv({ cls: 'tt-delete-radio-group' });
+
+        // Вариант 1: Переместить задачи в другой статус
+        const option1 = actionRadioGroup.createDiv({ cls: 'tt-radio-option' });
+        const label1 = option1.createEl('label', { cls: 'tt-radio-label' });
+        const radio1 = label1.createEl('input', { type: 'radio', name: 'delete-action', value: 'move' });
+        radio1.checked = true;
+        label1.createSpan({ text: 'Переместить задачи в статус:' });
+
+        const selectDropdown = option1.createEl('select', { cls: 'dropdown' });
+        otherStatuses.forEach(s => {
+            const opt = selectDropdown.createEl('option', { value: s.id, text: s.label });
+            if (s.id === targetStatusId) opt.selected = true;
+        });
+
+        const updateSelection = (action) => {
+            selectedAction = action;
+            radio1.checked = (action === 'move');
+            radio2.checked = (action === 'unassigned');
+        };
+
+        option1.onclick = (e) => {
+            updateSelection('move');
+        };
+
+        selectDropdown.onchange = (e) => {
+            e.stopPropagation();
+            targetStatusId = e.target.value;
+            updateSelection('move');
+        };
+
+        // Вариант 2: Оставить без статуса (создать временный)
+        const option2 = actionRadioGroup.createDiv({ cls: 'tt-radio-option' });
+        const label2 = option2.createEl('label', { cls: 'tt-radio-label' });
+        const radio2 = label2.createEl('input', { type: 'radio', name: 'delete-action', value: 'unassigned' });
+        label2.createSpan({ text: 'Оставить пока без статуса' });
+
+        option2.createDiv({ 
+            cls: 'tt-radio-desc', 
+            text: 'Задачи перейдут во временный статус "Без статуса", который автоматически удалится, когда вы разберете все задачи из него.' 
+        });
+
+        option2.onclick = () => {
+            updateSelection('unassigned');
+        };
+
+        radio1.onchange = () => updateSelection('move');
+        radio2.onchange = () => updateSelection('unassigned');
+
+        // Кнопки управления
+        new obsidian.Setting(contentEl)
+            .addButton(btn => btn
+                .setButtonText('Отмена')
+                .onClick(() => this.close()))
+            .addButton(btn => btn
+                .setButtonText('Подтвердить удаление')
+                .setWarning()
+                .onClick(async () => {
+                    if (selectedAction === 'move') {
+                        if (!targetStatusId) return;
+                        await TaskEngine.updateMultipleTasksStatus(this.app, this.plugin.settings, tasksInStatus, targetStatusId);
+                    } else if (selectedAction === 'unassigned') {
+                        let unassignedStatus = this.plugin.settings.statuses.find(s => s.id === 'unassigned');
+                        if (!unassignedStatus) {
+                            unassignedStatus = {
+                                id: 'unassigned',
+                                label: 'Без статуса',
+                                color: '#95a5a6',
+                                isTemporary: true
+                            };
+                            this.plugin.settings.statuses.push(unassignedStatus);
+                        }
+                        await TaskEngine.updateMultipleTasksStatus(this.app, this.plugin.settings, tasksInStatus, 'unassigned');
+                    }
+
+                    await this.deleteStatusDirectly();
+                    this.close();
+                    if (this.onSuccess) this.onSuccess();
+                }));
+    }
+
+    async deleteStatusDirectly() {
+        const idx = this.plugin.settings.statuses.findIndex(s => s.id === this.statusToDelete.id);
+        if (idx !== -1) {
+            this.plugin.settings.statuses.splice(idx, 1);
+            if (this.plugin.settings.doneStatusId === this.statusToDelete.id) {
+                this.plugin.settings.doneStatusId = this.plugin.settings.statuses[0]?.id || '';
+            }
+            await this.plugin.saveSettings();
+        }
+    }
+}
+
+class EditStatusModal extends obsidian.Modal {
+    constructor(app, plugin, statusToEdit, onSuccess) {
+        super(app);
+        this.plugin = plugin;
+        this.statusToEdit = statusToEdit;
+        this.onSuccess = onSuccess;
+    }
+
+    onOpen() {
+        const { contentEl } = this;
+        const isEdit = !!this.statusToEdit;
+        contentEl.createEl('h3', { text: isEdit ? 'Редактировать статус' : 'Добавить новый статус' });
+
+        let label = isEdit ? this.statusToEdit.label : '';
+        let idTag = isEdit ? this.statusToEdit.id : '';
+        let color = isEdit ? this.statusToEdit.color : PASTEL_COLORS[Math.floor(Math.random() * PASTEL_COLORS.length)];
+        let isDone = isEdit ? (this.plugin.settings.doneStatusId === this.statusToEdit.id) : false;
+
+        new obsidian.Setting(contentEl)
+            .setName('Название статуса')
+            .setDesc('Отображаемое заглавное имя статуса')
+            .addText(t => {
+                t.setValue(label);
+                t.onChange(v => {
+                    label = v;
+                    if (!isEdit && !idTag) {
+                        idTag = v.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^\w_-]/g, '');
+                    }
+                });
+            });
+
+        new obsidian.Setting(contentEl)
+            .setName('Тег статуса (ID)')
+            .setDesc(`Идентификатор статуса в заметках (например, ${this.plugin.settings.statusPrefix}id)`)
+            .addText(t => {
+                t.setValue(idTag);
+                t.onChange(v => idTag = v.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^\w_-]/g, ''));
+            });
+
+        new obsidian.Setting(contentEl)
+            .setName('Установить как Done-статус')
+            .setDesc('Отмечает задачи с этим статусом как завершённые [x]')
+            .addToggle(toggle => {
+                toggle.setValue(isDone);
+                toggle.onChange(val => isDone = val);
+            });
+
+        const colorSetting = new obsidian.Setting(contentEl)
+            .setName('Цвет статуса');
+
+        const colorWrap = colorSetting.controlEl.createDiv({ cls: 'tt-status-color-wrap' });
+        const colorPicker = colorWrap.createEl('input', { type: 'color', value: color });
+        const hexInput = colorWrap.createEl('input', { type: 'text', value: color });
+        hexInput.style.width = '75px';
+
+        colorPicker.oninput = (e) => {
+            color = e.target.value;
+            hexInput.value = color;
+        };
+        hexInput.onchange = (e) => {
+            let val = e.target.value.trim();
+            if (!val.startsWith('#')) val = '#' + val;
+            color = val;
+            colorPicker.value = color;
+        };
+
+        const chipsGrid = colorWrap.createDiv({ cls: 'tt-pastel-chips-grid' });
+        PASTEL_COLORS.forEach(hex => {
+            const chip = chipsGrid.createDiv({ cls: 'tt-pastel-chip' });
+            chip.style.backgroundColor = hex;
+            chip.onclick = () => {
+                color = hex;
+                colorPicker.value = hex;
+                hexInput.value = hex;
+            };
+        });
+
+        new obsidian.Setting(contentEl)
+            .addButton(btn => btn
+                .setButtonText(isEdit ? 'Сохранить' : 'Создать')
+                .setCta()
+                .onClick(async () => {
+                    if (!label.trim()) return;
+
+                    const finalId = idTag || label.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^\w_-]/g, '') || `status_${Date.now()}`;
+
+                    if (isEdit) {
+                        const oldId = this.statusToEdit.id;
+                        this.statusToEdit.label = label.trim();
+                        this.statusToEdit.id = finalId;
+                        this.statusToEdit.color = color;
+
+                        if (this.plugin.settings.doneStatusId === oldId) {
+                            if (isDone) {
+                                this.plugin.settings.doneStatusId = finalId;
+                            } else {
+                                this.plugin.settings.doneStatusId = '';
+                            }
+                        } else if (isDone) {
+                            this.plugin.settings.doneStatusId = finalId;
+                        }
+                    } else {
+                        this.plugin.settings.statuses.push({
+                            id: finalId,
+                            label: label.trim(),
+                            color: color
+                        });
+
+                        if (isDone) {
+                            this.plugin.settings.doneStatusId = finalId;
+                        }
+                    }
+
+                    await this.plugin.saveSettings();
+                    this.close();
+                    if (this.onSuccess) this.onSuccess();
+                }));
+    }
+}
+
+class ManageStatusesModal extends obsidian.Modal {
+    constructor(app, plugin, onSuccess) {
+        super(app);
+        this.plugin = plugin;
+        this.onSuccess = onSuccess;
+    }
+
+    onOpen() {
+        this.render();
+    }
+
+    render() {
+        const { contentEl } = this;
+        contentEl.empty();
+        contentEl.createEl('h2', { text: 'Управление статусами' });
+
+        let draggedIndex = null;
+        const listContainer = contentEl.createDiv({ cls: 'tt-status-settings-list' });
+
+        this.plugin.settings.statuses.forEach((status, idx) => {
+            const item = listContainer.createDiv({ cls: 'tt-status-settings-item' });
+            item.setAttribute('draggable', 'true');
+
+            const dragSpan = item.createSpan({ cls: 'tt-drag-handle' });
+            dragSpan.innerHTML = renderIcon('grip');
+
+            const idInput = item.createEl('input', { type: 'text', value: status.id, placeholder: 'ID (Тег)' });
+            idInput.style.width = '90px';
+            idInput.onchange = async (e) => {
+                const oldId = status.id;
+                const newId = e.target.value.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^\w_-]/g, '');
+                status.id = newId;
+                if (this.plugin.settings.doneStatusId === oldId) {
+                    this.plugin.settings.doneStatusId = newId;
+                }
+                await this.plugin.saveSettings();
+                this.onSuccess();
+            };
+
+            const labelInput = item.createEl('input', { type: 'text', value: status.label, placeholder: 'Название' });
+            labelInput.style.flex = '1';
+            labelInput.onchange = async (e) => {
+                status.label = e.target.value.trim();
+                await this.plugin.saveSettings();
+                this.onSuccess();
+            };
+
+            const isDoneCheckbox = item.createEl('input', { type: 'checkbox' });
+            isDoneCheckbox.checked = (this.plugin.settings.doneStatusId === status.id);
+            isDoneCheckbox.title = 'Установить как Done-статус';
+            isDoneCheckbox.onchange = async () => {
+                if (isDoneCheckbox.checked) {
+                    this.plugin.settings.doneStatusId = status.id;
+                } else if (this.plugin.settings.doneStatusId === status.id) {
+                    this.plugin.settings.doneStatusId = '';
+                }
+                await this.plugin.saveSettings();
+                this.onSuccess();
+                this.render();
+            };
+
+            const colorWrap = item.createDiv({ cls: 'tt-status-color-wrap' });
+            const textHexInput = colorWrap.createEl('input', { type: 'text', value: status.color, placeholder: '#HEX' });
+            textHexInput.style.width = '70px';
+
+            const colorWheelInput = colorWrap.createEl('input', { type: 'color', value: status.color });
+
+            textHexInput.onchange = async (e) => {
+                let val = e.target.value.trim();
+                if (!val.startsWith('#')) val = '#' + val;
+                status.color = val;
+                colorWheelInput.value = val;
+                await this.plugin.saveSettings();
+                this.onSuccess();
+            };
+
+            colorWheelInput.onchange = async (e) => {
+                const val = e.target.value;
+                status.color = val;
+                textHexInput.value = val;
+                await this.plugin.saveSettings();
+                this.onSuccess();
+            };
+
+            if (!status.isTemporary) {
+                const delBtn = item.createEl('button', { cls: 'tt-icon-btn' });
+                delBtn.innerHTML = renderIcon('trash');
+                delBtn.title = 'Удалить статус';
+                delBtn.onclick = () => {
+                    new DeleteStatusConfirmModal(this.app, this.plugin, status, () => {
+                        this.onSuccess();
+                        this.render();
+                    }).open();
+                };
+            } else {
+                const tempLabel = item.createSpan({ text: '[Временный]', cls: 'tt-temp-badge-inline' });
+                tempLabel.title = 'Этот статус будет удален автоматически, когда вы переместите из него все задачи.';
+            }
+
+            item.addEventListener('dragstart', () => {
+                draggedIndex = idx;
+                item.style.opacity = '0.5';
+            });
+
+            item.addEventListener('dragend', () => {
+                item.style.opacity = '1';
+                draggedIndex = null;
+            });
+
+            item.addEventListener('dragover', (e) => e.preventDefault());
+
+            item.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                if (draggedIndex !== null && draggedIndex !== idx) {
+                    const movedItem = this.plugin.settings.statuses.splice(draggedIndex, 1)[0];
+                    this.plugin.settings.statuses.splice(idx, 0, movedItem);
+                    await this.plugin.saveSettings();
+                    this.onSuccess();
+                    this.render();
+                }
+            });
+        });
+
+        new obsidian.Setting(contentEl)
+            .addButton(btn => btn
+                .setButtonText('+ Добавить новый статус')
+                .setCta()
+                .onClick(() => {
+                    new EditStatusModal(this.app, this.plugin, null, async () => {
+                        this.onSuccess();
+                        this.render();
+                    }).open();
+                }));
     }
 }
 
@@ -1579,7 +2144,12 @@ class TaskTrackerSettingTab extends obsidian.PluginSettingTab {
             const idInput = item.createEl('input', { type: 'text', value: status.id, placeholder: 'ID' });
             idInput.style.width = '80px';
             idInput.onchange = async (e) => {
-                this.plugin.settings.statuses[idx].id = e.target.value;
+                const oldId = status.id;
+                const newId = e.target.value.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^\w_-]/g, '');
+                status.id = newId;
+                if (this.plugin.settings.doneStatusId === oldId) {
+                    this.plugin.settings.doneStatusId = newId;
+                }
                 await this.plugin.saveSettings();
             };
 
@@ -1590,28 +2160,25 @@ class TaskTrackerSettingTab extends obsidian.PluginSettingTab {
                 await this.plugin.saveSettings();
             };
 
+            const isDoneCheckbox = item.createEl('input', { type: 'checkbox' });
+            isDoneCheckbox.checked = (this.plugin.settings.doneStatusId === status.id);
+            isDoneCheckbox.title = 'Установить как Done-статус';
+            isDoneCheckbox.onchange = async () => {
+                if (isDoneCheckbox.checked) {
+                    this.plugin.settings.doneStatusId = status.id;
+                } else if (this.plugin.settings.doneStatusId === status.id) {
+                    this.plugin.settings.doneStatusId = '';
+                }
+                await this.plugin.saveSettings();
+                this.display();
+            };
+
             const colorWrap = item.createDiv({ cls: 'tt-status-color-wrap' });
 
             const textHexInput = colorWrap.createEl('input', { type: 'text', value: status.color, placeholder: '#HEX' });
             textHexInput.style.width = '75px';
 
             const colorWheelInput = colorWrap.createEl('input', { type: 'color', value: status.color });
-
-            const chipsGrid = colorWrap.createDiv({ cls: 'tt-pastel-chips-grid' });
-            PASTEL_COLORS.forEach(hex => {
-                const chip = chipsGrid.createDiv({ cls: 'tt-pastel-chip' });
-                chip.style.backgroundColor = hex;
-                if (status.color.toLowerCase() === hex.toLowerCase()) {
-                    chip.addClass('tt-chip-selected');
-                }
-                chip.onclick = async () => {
-                    status.color = hex;
-                    textHexInput.value = hex;
-                    colorWheelInput.value = hex;
-                    await this.plugin.saveSettings();
-                    this.display();
-                };
-            });
 
             textHexInput.onchange = async (e) => {
                 let val = e.target.value.trim();
@@ -1629,13 +2196,16 @@ class TaskTrackerSettingTab extends obsidian.PluginSettingTab {
                 this.display();
             };
 
-            const delBtn = item.createEl('button', { cls: 'tt-icon-btn' });
-            delBtn.innerHTML = renderIcon('trash');
-            delBtn.onclick = async () => {
-                this.plugin.settings.statuses.splice(idx, 1);
-                await this.plugin.saveSettings();
-                this.display();
-            };
+            if (!status.isTemporary) {
+                const delBtn = item.createEl('button', { cls: 'tt-icon-btn' });
+                delBtn.innerHTML = renderIcon('trash');
+                delBtn.onclick = () => {
+                    new DeleteStatusConfirmModal(this.app, this.plugin, status, () => this.display()).open();
+                };
+            } else {
+                const tempLabel = item.createSpan({ text: '[Временный]', cls: 'tt-temp-badge-inline' });
+                tempLabel.title = 'Этот статус будет удален автоматически, когда вы переместите из него все задачи.';
+            }
 
             item.addEventListener('dragstart', () => {
                 draggedIndex = idx;
