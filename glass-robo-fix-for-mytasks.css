@@ -1,0 +1,153 @@
+/* ==========================================================================
+   GLASS ROBO ADAPTATION FOR TASK TRACKER (TASK HUB)
+   ========================================================================== */
+
+/* 1. Главный контейнер (убираем глухой фон плагина) */
+.task-tracker-container {
+    background-color: transparent !important;
+}
+
+/* 2. Шапка, переключатель режимов и фильтры */
+.task-tracker-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.tt-view-switcher {
+    background: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    backdrop-filter: blur(12px);
+    border-radius: 8px;
+}
+
+.tt-view-tab {
+    color: var(--text-muted);
+}
+
+.tt-view-tab:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: var(--text-normal);
+}
+
+.tt-view-tab.is-active {
+    background: rgba(255, 255, 255, 0.15) !important;
+    color: var(--text-normal);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.tt-project-filter-dropdown {
+    background: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    backdrop-filter: blur(8px);
+}
+
+.tt-project-filter-dropdown:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* 3. РЕЖИМ КАЛЕНДАРЯ */
+.tt-unscheduled-sidebar {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    backdrop-filter: blur(10px);
+    border-radius: 10px;
+}
+
+.tt-unscheduled-card {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    backdrop-filter: blur(6px);
+}
+
+.tt-unscheduled-card:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.tt-calendar-day {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.07) !important;
+    backdrop-filter: blur(8px);
+    border-radius: 8px !important;
+}
+
+.tt-calendar-day:hover {
+    background: rgba(255, 255, 255, 0.07) !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.tt-calendar-day.tt-other-month {
+    opacity: 0.25;
+    background: rgba(0, 0, 0, 0.15) !important;
+}
+
+/* 4. РЕЖИМ КАНБАН */
+.tt-kanban-column {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    backdrop-filter: blur(10px);
+    border-radius: 10px;
+}
+
+.tt-kanban-card {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+.tt-kanban-card:hover {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+/* 5. РЕЖИМ ДРЕВО */
+.tt-project-title {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.tt-task-item {
+    border: 1px solid transparent;
+    border-radius: 6px;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.tt-task-item:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.tt-date-tag {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+/* 6. МОДАЛЬНЫЕ ОКНА И НАСТРОЙКИ */
+.tt-styled-date-input {
+    background: rgba(0, 0, 0, 0.3) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+.tt-preset-chip {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.tt-preset-chip:hover {
+    background: rgba(255, 255, 255, 0.15) !important;
+    border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+.tt-status-settings-item {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+/* 7. МЕНЮ СКРЫТИЯ УРОВНЕЙ САБТАСКОВ */
+.tt-levels-popup {
+    background: var(--modal-background, var(--background-primary)) !important;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+}

@@ -167,6 +167,27 @@
     background-color: var(--background-modifier-hover);
 }
 
+.tt-subtask-count {
+    font-size: 0.72em;
+    padding: 1px 5px;
+    border-radius: 10px;
+    background: var(--background-modifier-border);
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-left: 4px;
+    vertical-align: middle;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1.2;
+}
+
+.tt-bar-subtask-count {
+    background: rgba(0, 0, 0, 0.25);
+    color: #fff;
+    margin-left: 6px;
+    font-size: 0.68em;
+}
+
 .tt-card-title-row {
     display: flex;
     align-items: flex-start;
@@ -513,6 +534,11 @@
     background: var(--background-modifier-hover);
     color: var(--text-normal);
     border-color: var(--interactive-accent);
+}
+
+.tt-levels-btn.is-active {
+    border-color: var(--interactive-accent);
+    color: var(--text-accent);
 }
 
 .tt-unscheduled-list {
@@ -907,4 +933,186 @@ body.tt-resizing-active .tt-calendar-bar {
 .tt-delete-radio-group select {
     margin-left: 24px;
     max-width: 200px;
+}
+
+/* ==================== ВЫПАДАЮЩЕЕ ОКНО НАСТРОЙКИ УРОВНЕЙ ==================== */
+
+.tt-levels-btn.is-active {
+    color: var(--interactive-accent);
+    border-color: var(--interactive-accent);
+    background: var(--background-modifier-hover);
+}
+
+.tt-levels-popup {
+    position: fixed;
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    padding: 12px;
+    width: 330px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 0.85em;
+    color: var(--text-normal);
+    animation: ttFadeIn 0.15s ease;
+}
+
+@keyframes ttFadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.tt-levels-popup-header {
+    border-bottom: 1px solid var(--background-modifier-border);
+    padding-bottom: 8px;
+}
+
+.tt-levels-popup-title {
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    font-size: 1.05em;
+}
+
+.tt-levels-popup-hint {
+    font-size: 0.82em;
+    color: var(--text-muted);
+    line-height: 1.35;
+    padding: 6px 8px;
+    background: var(--background-primary);
+    border-radius: 4px;
+    border-left: 3px solid var(--interactive-accent);
+}
+
+.tt-levels-tree {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 4px 0;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.tt-level-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.15s ease, opacity 0.2s ease;
+    user-select: none;
+    border: 1px solid transparent;
+}
+
+.tt-level-row:hover {
+    background-color: var(--background-modifier-hover);
+    border-color: var(--background-modifier-border);
+}
+
+.tt-level-row.is-root {
+    cursor: default;
+    font-weight: 600;
+    color: var(--text-normal);
+    border-left: 3px solid var(--interactive-accent);
+    background: var(--background-primary);
+}
+
+.tt-level-row.is-root:hover {
+    background: var(--background-primary);
+    border-color: transparent;
+    border-left-color: var(--interactive-accent);
+}
+
+.tt-level-row.is-hidden {
+    opacity: 0.40;
+    color: var(--text-muted);
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.tt-level-row.is-hidden:hover {
+    opacity: 0.75;
+    background-color: var(--background-modifier-hover);
+}
+
+.tt-level-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+.tt-level-row:hover .tt-level-icon {
+    color: var(--text-normal);
+}
+
+.tt-level-label {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+}
+
+.tt-level-text {
+    font-weight: 500;
+}
+
+.tt-level-subtle {
+    font-size: 0.85em;
+    color: var(--text-faint);
+}
+
+.tt-level-badge {
+    font-size: 0.75em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.tt-level-badge.is-visible {
+    background: rgba(46, 204, 113, 0.15);
+    color: #2ecc71;
+}
+
+.tt-level-badge.is-hidden {
+    background: rgba(231, 76, 60, 0.15);
+    color: #e74c3c;
+}
+
+.tt-levels-popup-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+    border-top: 1px solid var(--background-modifier-border);
+    padding-top: 8px;
+}
+
+.tt-levels-action-btn {
+    background: transparent;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 0.8em;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.tt-levels-action-btn:hover {
+    color: var(--text-normal);
+    background: var(--background-modifier-hover);
+    border-color: var(--interactive-accent);
 }

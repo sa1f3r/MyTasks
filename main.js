@@ -10,6 +10,8 @@ const DEFAULT_SETTINGS = {
     completionDatePrefix: '✅ ',
     doneStatusId: 'done',
     hideDoneUnscheduled: false,
+    projectHiddenLevels: {},
+    defaultHiddenLevels: [],
     statuses: [
         { id: 'todo', label: 'To Do', color: '#7f8c8d' },
         { id: 'in_progress', label: 'In Progress', color: '#f39c12' },
@@ -52,6 +54,7 @@ const NOTION_ICONS = {
     trash: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
     grip: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><circle cx="9" cy="5" r="1"></circle><circle cx="9" cy="12" r="1"></circle><circle cx="9" cy="19" r="1"></circle><circle cx="15" cy="5" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="15" cy="19" r="1"></circle></svg>',
     sliders: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>',
+    layers: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>',
     list: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>'
 };
 
@@ -248,14 +251,19 @@ class TaskEngine {
                     completionDate,
                     project,
                     indentLevel: indent,
+                    level: parentStack.length,
                     parentLineIndex: parentTask ? parentTask.lineIndex : null,
                     parentText: parentTask ? parentTask.text : null,
-                    hasChildren: false
+                    hasChildren: false,
+                    childCount: 0
                 };
 
                 if (parentTask) {
                     const parentInList = tasks.find(t => t.lineIndex === parentTask.lineIndex);
-                    if (parentInList) parentInList.hasChildren = true;
+                    if (parentInList) {
+                        parentInList.hasChildren = true;
+                        parentInList.childCount = (parentInList.childCount || 0) + 1;
+                    }
                 }
 
                 tasks.push(taskObj);
@@ -489,6 +497,224 @@ class TaskTrackerView extends obsidian.ItemView {
     getDisplayText() { return 'Task Tracker'; }
     getIcon() { return 'kanban'; }
 
+    getHiddenLevelsForCurrentProject() {
+        if (!this.plugin.settings.projectHiddenLevels) {
+            this.plugin.settings.projectHiddenLevels = {};
+        }
+        const key = this.selectedProjectFilter;
+        if (this.plugin.settings.projectHiddenLevels[key] !== undefined) {
+            return this.plugin.settings.projectHiddenLevels[key];
+        }
+        return this.plugin.settings.defaultHiddenLevels || [];
+    }
+
+    async saveHiddenLevelsForCurrentProject(levels) {
+        if (!this.plugin.settings.projectHiddenLevels) {
+            this.plugin.settings.projectHiddenLevels = {};
+        }
+        this.plugin.settings.projectHiddenLevels[this.selectedProjectFilter] = levels;
+        await this.plugin.saveSettings();
+    }
+
+    isTaskLevelHidden(task, tasksMap, hiddenLevels) {
+        if (!hiddenLevels || hiddenLevels.length === 0) return false;
+        if (hiddenLevels.includes(task.level)) return true;
+        let currentParentIndex = task.parentLineIndex;
+        while (currentParentIndex !== null && currentParentIndex !== undefined) {
+            const parent = tasksMap.get(currentParentIndex);
+            if (!parent) break;
+            if (hiddenLevels.includes(parent.level)) return true;
+            currentParentIndex = parent.parentLineIndex;
+        }
+        return false;
+    }
+
+    updateLevelsButtonLabel(btnLevels) {
+        if (!btnLevels) return;
+        const hiddenLevels = this.getHiddenLevelsForCurrentProject();
+        const projName = this.selectedProjectFilter === 'ALL' ? '«Все проекты»' : `«${this.selectedProjectFilter}»`;
+        btnLevels.className = `tt-action-btn tt-icon-btn tt-levels-btn ${hiddenLevels.length > 0 ? 'is-active' : ''}`;
+        
+        const tooltipText = `Скрытие уровней сабтасков: задачи выбранного уровня будут скрыты только для проекта ${projName}`;
+        btnLevels.title = tooltipText;
+        btnLevels.setAttribute('aria-label', tooltipText);
+
+        const levelsLabel = hiddenLevels.length > 0
+            ? `Скрыты: ${hiddenLevels.map(l => `Ур.${l}`).join(', ')}`
+            : 'Уровни сабтасков';
+        btnLevels.innerHTML = `${renderIcon('layers')} <span>${levelsLabel}</span>`;
+    }
+
+    renderViewContent() {
+        const mainContent = this.containerEl.querySelector('.task-tracker-view-content');
+        if (mainContent) {
+            mainContent.empty();
+            if (this.currentMode === 'kanban') this.renderKanban(mainContent);
+            else if (this.currentMode === 'tree') this.renderTree(mainContent);
+            else if (this.currentMode === 'calendar') this.renderCalendar(mainContent);
+        } else {
+            this.renderUI();
+        }
+    }
+
+    closeLevelsPopup() {
+        if (this.activeLevelsPopup) {
+            this.activeLevelsPopup.remove();
+            this.activeLevelsPopup = null;
+        }
+        if (this.levelsDocClickHandler) {
+            document.removeEventListener('click', this.levelsDocClickHandler);
+            this.levelsDocClickHandler = null;
+        }
+        if (this.levelsKeyHandler) {
+            document.removeEventListener('keydown', this.levelsKeyHandler);
+            this.levelsKeyHandler = null;
+        }
+        if (this.levelsResizeHandler) {
+            window.removeEventListener('resize', this.levelsResizeHandler);
+            this.levelsResizeHandler = null;
+        }
+    }
+
+    openLevelsPopup(buttonEl) {
+        if (this.activeLevelsPopup) {
+            this.closeLevelsPopup();
+            return;
+        }
+
+        const popupEl = document.createElement('div');
+        popupEl.className = 'tt-levels-popup';
+        this.activeLevelsPopup = popupEl;
+
+        // Prevent click and mousedown inside popup from bubbling to document (prevents unexpected closing)
+        popupEl.addEventListener('click', (e) => e.stopPropagation());
+        popupEl.addEventListener('mousedown', (e) => e.stopPropagation());
+
+        const rect = buttonEl.getBoundingClientRect();
+        popupEl.style.top = `${rect.bottom + 6}px`;
+        popupEl.style.left = `${Math.max(10, Math.min(window.innerWidth - 350, rect.left - 40))}px`;
+
+        const headerEl = popupEl.createDiv({ cls: 'tt-levels-popup-header' });
+        const titleRow = headerEl.createDiv({ cls: 'tt-levels-popup-title' });
+        titleRow.innerHTML = `${renderIcon('layers')} <span>Видимость уровней сабтасков</span>`;
+        
+        const projName = this.selectedProjectFilter === 'ALL' ? '«Все проекты»' : `«${this.selectedProjectFilter}»`;
+        const hintEl = headerEl.createDiv({ cls: 'tt-levels-popup-hint' });
+        hintEl.innerHTML = `Задачи выбранного уровня будут скрыты только для проекта <strong>${projName}</strong>`;
+
+        const treeEl = popupEl.createDiv({ cls: 'tt-levels-tree' });
+
+        // Root task (always visible)
+        const rootRow = treeEl.createDiv({ cls: 'tt-level-row is-root' });
+        rootRow.title = 'Родительские задачи отображаются всегда';
+        const rootIcon = rootRow.createSpan({ cls: 'tt-level-icon' });
+        rootIcon.innerHTML = renderIcon('eye');
+        const rootLabel = rootRow.createSpan({ cls: 'tt-level-label' });
+        rootLabel.innerHTML = '<span class="tt-level-text">Родительская задача</span>';
+        rootRow.createSpan({ cls: 'tt-level-badge is-visible', text: 'Всегда видна' });
+
+        // Calculate max nesting level (minimum 3 levels, dynamically expands if more exist)
+        const projectTasks = this.getFilteredTasks();
+        const storedHidden = this.getHiddenLevelsForCurrentProject();
+        const highestStored = storedHidden.length > 0 ? Math.max(...storedHidden) : 0;
+        const tasksMaxLevel = projectTasks.reduce((max, t) => Math.max(max, t.level || 0), 0);
+        const maxLevel = Math.max(3, highestStored, tasksMaxLevel);
+
+        const rowEntries = [];
+
+        for (let lvl = 1; lvl <= maxLevel; lvl++) {
+            const row = treeEl.createDiv({ cls: 'tt-level-row' });
+            row.style.paddingLeft = `${12 + (lvl * 16)}px`;
+
+            const iconSpan = row.createSpan({ cls: 'tt-level-icon' });
+            const labelSpan = row.createSpan({ cls: 'tt-level-label' });
+            labelSpan.innerHTML = `<span class="tt-level-text">- скрыть подзадачу</span> <span class="tt-level-subtle">(${lvl} ур.)</span>`;
+            const badgeSpan = row.createSpan({ cls: 'tt-level-badge' });
+
+            const updateRowUI = () => {
+                const isHidden = this.getHiddenLevelsForCurrentProject().includes(lvl);
+                row.classList.toggle('is-hidden', isHidden);
+                iconSpan.innerHTML = renderIcon(isHidden ? 'eyeOff' : 'eye');
+                badgeSpan.className = `tt-level-badge ${isHidden ? 'is-hidden' : 'is-visible'}`;
+                badgeSpan.setText(isHidden ? 'Скрыта' : 'Видна');
+                row.title = isHidden 
+                    ? `Нажмите, чтобы показать подзадачи ${lvl}-го уровня` 
+                    : `Нажмите, чтобы скрыть подзадачи ${lvl}-го уровня`;
+            };
+
+            row.onclick = async (e) => {
+                e.stopPropagation();
+                let currentHidden = [...this.getHiddenLevelsForCurrentProject()];
+                if (currentHidden.includes(lvl)) {
+                    currentHidden = currentHidden.filter(l => l !== lvl);
+                } else {
+                    currentHidden.push(lvl);
+                    currentHidden.sort((a, b) => a - b);
+                }
+                await this.saveHiddenLevelsForCurrentProject(currentHidden);
+                rowEntries.forEach(entry => entry.updateRowUI());
+                this.updateLevelsButtonLabel(buttonEl);
+                this.renderViewContent();
+            };
+
+            updateRowUI();
+            rowEntries.push({ lvl, row, updateRowUI });
+        }
+
+        const actionsRow = popupEl.createDiv({ cls: 'tt-levels-popup-actions' });
+        const btnShowAll = actionsRow.createEl('button', { cls: 'tt-levels-action-btn' });
+        btnShowAll.innerHTML = `${renderIcon('eye')} <span>Показать все</span>`;
+        btnShowAll.title = 'Сделать видимыми все уровни сабтасков для этого проекта';
+        btnShowAll.onclick = async (e) => {
+            e.stopPropagation();
+            await this.saveHiddenLevelsForCurrentProject([]);
+            rowEntries.forEach(entry => entry.updateRowUI());
+            this.updateLevelsButtonLabel(buttonEl);
+            this.renderViewContent();
+        };
+
+        const btnHideAll = actionsRow.createEl('button', { cls: 'tt-levels-action-btn' });
+        btnHideAll.innerHTML = `${renderIcon('eyeOff')} <span>Скрыть сабтаски</span>`;
+        btnHideAll.title = 'Скрыть все уровни сабтасков для этого проекта';
+        btnHideAll.onclick = async (e) => {
+            e.stopPropagation();
+            const allSubLevels = [];
+            for (let l = 1; l <= maxLevel; l++) allSubLevels.push(l);
+            await this.saveHiddenLevelsForCurrentProject(allSubLevels);
+            rowEntries.forEach(entry => entry.updateRowUI());
+            this.updateLevelsButtonLabel(buttonEl);
+            this.renderViewContent();
+        };
+
+        document.body.appendChild(popupEl);
+
+        this.levelsDocClickHandler = (e) => {
+            if (!this.activeLevelsPopup) return;
+            const path = e.composedPath ? e.composedPath() : [];
+            if (path.includes(popupEl) || path.includes(buttonEl)) return;
+            if (popupEl.contains(e.target) || buttonEl.contains(e.target)) return;
+            this.closeLevelsPopup();
+        };
+        this.levelsKeyHandler = (e) => {
+            if (e.key === 'Escape') {
+                this.closeLevelsPopup();
+            }
+        };
+        this.levelsResizeHandler = () => {
+            this.closeLevelsPopup();
+        };
+
+        setTimeout(() => {
+            document.addEventListener('click', this.levelsDocClickHandler);
+            document.addEventListener('keydown', this.levelsKeyHandler);
+            window.addEventListener('resize', this.levelsResizeHandler);
+        }, 0);
+    }
+
+    async onClose() {
+        this.closeLevelsPopup();
+    }
+
     async onOpen() {
         this.registerEvent(
             this.app.vault.on('modify', async (file) => {
@@ -663,6 +889,7 @@ class TaskTrackerView extends obsidian.ItemView {
     }
 
     renderUI() {
+        this.closeLevelsPopup();
         const container = this.containerEl.children[1];
         container.empty();
         container.addClass('task-tracker-container');
@@ -746,6 +973,16 @@ class TaskTrackerView extends obsidian.ItemView {
             this.renderUI();
         };
 
+        const btnLevels = controls.createEl('button', {
+            cls: 'tt-action-btn tt-icon-btn tt-levels-btn'
+        });
+        this.updateLevelsButtonLabel(btnLevels);
+
+        btnLevels.onclick = (e) => {
+            e.stopPropagation();
+            this.openLevelsPopup(btnLevels);
+        };
+
         const btnManageStatuses = controls.createEl('button', { cls: 'tt-action-btn', title: 'Управление статусами' });
         btnManageStatuses.innerHTML = `${renderIcon('sliders')} <span>Статусы</span>`;
         btnManageStatuses.onclick = () => new ManageStatusesModal(this.app, this.plugin, () => this.refresh()).open();
@@ -770,6 +1007,7 @@ class TaskTrackerView extends obsidian.ItemView {
         const board = parent.createDiv({ cls: 'tt-kanban-board' });
         const filteredTasks = this.getFilteredTasks();
         const tasksMap = this.getTasksMap();
+        const hiddenLevels = this.getHiddenLevelsForCurrentProject();
 
         this.plugin.settings.statuses.forEach((status, idx) => {
             const col = board.createDiv({ cls: 'tt-kanban-column' });
@@ -871,7 +1109,12 @@ class TaskTrackerView extends obsidian.ItemView {
                 }
             });
 
-            const colTasks = filteredTasks.filter(t => t.status === status.id && !this.isTaskCollapsed(t, tasksMap));
+            const colTasks = filteredTasks.filter(t => {
+                if (t.status !== status.id) return false;
+                if (this.isTaskLevelHidden(t, tasksMap, hiddenLevels)) return false;
+                if (this.isTaskCollapsed(t, tasksMap)) return false;
+                return true;
+            });
 
             colTasks.forEach(task => {
                 const isSubtask = task.indentLevel > 0 || task.parentText;
@@ -923,6 +1166,10 @@ class TaskTrackerView extends obsidian.ItemView {
                         }
                         this.renderUI();
                     };
+                    if (task.childCount) {
+                        const badge = titleRow.createSpan({ cls: 'tt-subtask-count', text: `${task.childCount}` });
+                        badge.title = `Подзадач: ${task.childCount}`;
+                    }
                 }
 
                 titleRow.createSpan({ text: task.text, cls: 'tt-card-title-text' });
@@ -953,9 +1200,14 @@ class TaskTrackerView extends obsidian.ItemView {
         addStatusBtn.innerHTML = `${renderIcon('plus')} <span>Новый статус</span>`;
         addStatusBtn.onclick = () => new EditStatusModal(this.app, this.plugin, null, () => this.refresh()).open();
 
+        const hiddenLevels = this.getHiddenLevelsForCurrentProject();
         const filteredTasks = this.getFilteredTasks();
         const tasksMap = this.getTasksMap();
-        const visibleTasks = filteredTasks.filter(t => !this.isTaskCollapsed(t, tasksMap));
+        const visibleTasks = filteredTasks.filter(t => {
+            if (this.isTaskLevelHidden(t, tasksMap, hiddenLevels)) return false;
+            if (this.isTaskCollapsed(t, tasksMap)) return false;
+            return true;
+        });
         const projects = Array.from(new Set(visibleTasks.map(t => t.project)));
 
         projects.forEach(proj => {
@@ -985,6 +1237,10 @@ class TaskTrackerView extends obsidian.ItemView {
                         }
                         this.renderUI();
                     };
+                    if (task.childCount) {
+                        const badge = item.createSpan({ cls: 'tt-subtask-count', text: `${task.childCount}` });
+                        badge.title = `Подзадач: ${task.childCount}`;
+                    }
                 }
 
                 const check = item.createEl('input', { type: 'checkbox' });
@@ -1161,9 +1417,13 @@ class TaskTrackerView extends obsidian.ItemView {
         const sidebarHeader = sidebar.createDiv({ cls: 'tt-unscheduled-header' });
         const hideDone = this.plugin.settings.hideDoneUnscheduled;
 
+        const hiddenLevels = this.getHiddenLevelsForCurrentProject();
         let unscheduledTasks = filteredTasks.filter(t => !t.startDate && !t.dueDate);
         if (hideDone) {
             unscheduledTasks = unscheduledTasks.filter(t => !t.completed && t.status !== this.plugin.settings.doneStatusId);
+        }
+        if (hiddenLevels.length > 0) {
+            unscheduledTasks = unscheduledTasks.filter(t => !this.isTaskLevelHidden(t, tasksMap, hiddenLevels));
         }
 
         const visibleUnscheduled = unscheduledTasks.filter(t => !this.isTaskCollapsed(t, tasksMap));
@@ -1187,7 +1447,11 @@ class TaskTrackerView extends obsidian.ItemView {
 
         const unscheduledList = sidebar.createDiv({ cls: 'tt-unscheduled-list' });
         visibleUnscheduled.forEach(task => {
-            const card = unscheduledList.createDiv({ cls: 'tt-unscheduled-card' });
+            const isSubtask = task.indentLevel > 0 || task.parentText;
+            const card = unscheduledList.createDiv({ cls: `tt-unscheduled-card ${isSubtask ? 'tt-subtask-card' : ''}` });
+            if (task.indentLevel > 0) {
+                card.style.marginLeft = `${task.indentLevel * 12}px`;
+            }
 
             const topRow = card.createDiv({ cls: 'tt-unscheduled-card-top' });
             topRow.createDiv({ cls: 'tt-card-project' }).innerHTML = `${renderIcon('folder')} ${task.project}`;
@@ -1227,6 +1491,10 @@ class TaskTrackerView extends obsidian.ItemView {
                     }
                     this.renderUI();
                 };
+                if (task.childCount) {
+                    const badge = titleRow.createSpan({ cls: 'tt-subtask-count', text: `${task.childCount}` });
+                    badge.title = `Подзадач: ${task.childCount}`;
+                }
             }
 
             titleRow.createSpan({ cls: 'tt-unscheduled-card-text', text: task.text });
@@ -1280,7 +1548,10 @@ class TaskTrackerView extends obsidian.ItemView {
         const weeks = this.getWeeksForMonth(this.calendarYear, this.calendarMonth);
         const weeksGrid = mainArea.createDiv({ cls: 'tt-calendar-weeks-grid' });
 
-        const scheduledTasks = filteredTasks.filter(t => t.startDate || t.dueDate);
+        let scheduledTasks = filteredTasks.filter(t => t.startDate || t.dueDate);
+        if (hiddenLevels.length > 0) {
+            scheduledTasks = scheduledTasks.filter(t => !this.isTaskLevelHidden(t, tasksMap, hiddenLevels));
+        }
         const todayStr = formatDate(new Date());
 
         weeks.forEach(weekDays => {
@@ -1404,6 +1675,10 @@ class TaskTrackerView extends obsidian.ItemView {
                 pBadge.title = pInfo.label;
 
                 bar.createSpan({ cls: 'tt-bar-title', text: task.text });
+                if (task.childCount) {
+                    const badge = bar.createSpan({ cls: 'tt-subtask-count tt-bar-subtask-count', text: `${task.childCount}` });
+                    badge.title = `Подзадач: ${task.childCount}`;
+                }
 
                 bar.createDiv({ cls: 'tt-handle tt-handle-right', title: 'Изменить дедлайн' });
 

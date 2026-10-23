@@ -1,7 +1,7 @@
 {
   "id": "my-tasks",
   "name": "My Tasks",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "minAppVersion": "0.15.0",
   "description": "Task tracker with Kanban, Calendar and Tree views",
   "author": "sa1fer",
