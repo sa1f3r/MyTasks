@@ -50,6 +50,7 @@ const NOTION_ICONS = {
     chevronRight: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><polyline points="9 18 15 12 9 6"></polyline></svg>',
     chevronDown: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><polyline points="6 9 12 15 18 9"></polyline></svg>',
     chevronRightSmall: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><polyline points="9 18 15 12 9 6"></polyline></svg>',
+    cornerDownRight: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><polyline points="15 10 20 15 15 20"></polyline><path d="M4 4v7a4 4 0 0 0 4 4h12"></path></svg>',
     plus: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>',
     trash: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
     grip: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tt-notion-icon"><circle cx="9" cy="5" r="1"></circle><circle cx="9" cy="12" r="1"></circle><circle cx="9" cy="19" r="1"></circle><circle cx="15" cy="5" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="15" cy="19" r="1"></circle></svg>',
@@ -119,6 +120,164 @@ class FileSuggest extends obsidian.AbstractInputSuggest {
         this.inputEl.dispatchEvent(new Event('input'));
         this.close();
     }
+}
+
+function createParentTaskPicker(containerEl, allTasks, initialProject, initialParentTask, excludePredicate = null) {
+    let currentProject = initialProject;
+    let selectedParent = initialParentTask || null;
+
+    const wrapper = containerEl.createDiv({ cls: 'tt-parent-picker-container' });
+    const inputRow = wrapper.createDiv({ cls: 'tt-parent-input-row' });
+
+    const input = inputRow.createEl('input', {
+        type: 'text',
+        cls: 'tt-parent-input',
+        placeholder: 'Без родителя (корневая задача)'
+    });
+    if (selectedParent) {
+        input.value = selectedParent.text;
+    }
+
+    const actions = inputRow.createDiv({ cls: 'tt-parent-actions' });
+
+    const clearBtn = actions.createSpan({ cls: 'tt-parent-btn tt-parent-clear-btn', text: '✕' });
+    clearBtn.title = 'Очистить (сделать корневой задачей)';
+    clearBtn.style.display = selectedParent ? 'inline-flex' : 'none';
+
+    const toggleBtn = actions.createSpan({ cls: 'tt-parent-btn tt-parent-toggle-btn' });
+    toggleBtn.innerHTML = renderIcon('chevronDown');
+    toggleBtn.title = 'Показать все задачи проекта';
+
+    const dropdown = wrapper.createDiv({ cls: 'tt-parent-suggestions-list' });
+    dropdown.style.display = 'none';
+
+    function getAvailableTasks() {
+        return allTasks.filter(t => {
+            if (t.project !== currentProject) return false;
+            if (t.completed) return false;
+            if (excludePredicate && excludePredicate(t)) return false;
+            return true;
+        });
+    }
+
+    function renderDropdown(filterText = '') {
+        dropdown.empty();
+        const available = getAvailableTasks();
+        const normFilter = (filterText || '').trim().toLowerCase();
+
+        // Корневая опция "Без родителя"
+        const rootItem = dropdown.createDiv({ cls: 'tt-parent-suggestion-item is-root-option' });
+        const iconSpan = rootItem.createSpan({ cls: 'tt-parent-root-icon' });
+        iconSpan.innerHTML = renderIcon('cornerDownRight');
+        rootItem.createSpan({ text: '— Без родителя (корневая задача) —' });
+        if (!selectedParent) rootItem.addClass('is-selected');
+        rootItem.onclick = (e) => {
+            e.stopPropagation();
+            selectTask(null);
+        };
+
+        const filtered = available.filter(t => {
+            if (!normFilter) return true;
+            return t.text.toLowerCase().includes(normFilter);
+        });
+
+        if (filtered.length === 0 && normFilter) {
+            const emptyEl = dropdown.createDiv({ cls: 'tt-parent-suggestion-empty' });
+            emptyEl.setText('Задачи не найдены');
+            return;
+        }
+
+        filtered.forEach(t => {
+            const item = dropdown.createDiv({ cls: 'tt-parent-suggestion-item' });
+            if (selectedParent && (selectedParent.lineIndex === t.lineIndex || selectedParent.id === t.id)) {
+                item.addClass('is-selected');
+            }
+            if (t.level > 0) {
+                const prefixSpan = item.createSpan({ cls: 'tt-parent-item-prefix' });
+                prefixSpan.setText('— '.repeat(t.level));
+            }
+            const textSpan = item.createSpan({ cls: 'tt-parent-item-text' });
+            textSpan.setText(t.text);
+
+            item.onclick = (e) => {
+                e.stopPropagation();
+                selectTask(t);
+            };
+        });
+    }
+
+    function selectTask(task) {
+        selectedParent = task;
+        if (task) {
+            input.value = task.text;
+            clearBtn.style.display = 'inline-flex';
+        } else {
+            input.value = '';
+            clearBtn.style.display = 'none';
+        }
+        dropdown.style.display = 'none';
+    }
+
+    clearBtn.onclick = (e) => {
+        e.stopPropagation();
+        selectTask(null);
+    };
+
+    toggleBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (dropdown.style.display === 'none') {
+            renderDropdown('');
+            dropdown.style.display = 'block';
+            input.focus();
+        } else {
+            dropdown.style.display = 'none';
+        }
+    };
+
+    input.onfocus = () => {
+        renderDropdown(input.value);
+        dropdown.style.display = 'block';
+    };
+
+    input.oninput = () => {
+        renderDropdown(input.value);
+        dropdown.style.display = 'block';
+        if (!input.value.trim()) {
+            selectedParent = null;
+            clearBtn.style.display = 'none';
+        }
+    };
+
+    input.onkeydown = (e) => {
+        if (e.key === 'Escape') {
+            dropdown.style.display = 'none';
+        }
+    };
+
+    const onDocClick = (e) => {
+        if (!wrapper.isConnected) {
+            document.removeEventListener('click', onDocClick);
+            return;
+        }
+        if (!wrapper.contains(e.target)) {
+            dropdown.style.display = 'none';
+        }
+    };
+    document.addEventListener('click', onDocClick);
+
+    return {
+        getSelectedParent: () => selectedParent,
+        setSelectedParent: (task) => selectTask(task),
+        setProject: (newProject) => {
+            currentProject = newProject;
+            if (selectedParent && selectedParent.project !== newProject) {
+                selectTask(null);
+            }
+            if (dropdown.style.display !== 'none') {
+                renderDropdown(input.value);
+            }
+        }
+    };
 }
 
 class TaskEngine {
@@ -442,7 +601,7 @@ class TaskEngine {
         await app.vault.modify(file, newContent);
     }
 
-    static async addTask(app, settings, projectName, taskText, status, priority, startDate, dueDate) {
+    static async addTask(app, settings, projectName, taskText, status, priority, startDate, dueDate, parentTask = null) {
         let file = app.vault.getAbstractFileByPath(settings.masterFilePath);
         if (!(file instanceof obsidian.TFile)) {
             file = await app.vault.create(settings.masterFilePath, '');
@@ -450,8 +609,66 @@ class TaskEngine {
 
         const content = await app.vault.read(file);
         const lines = content.split('\n');
-        let projectLineIndex = -1;
 
+        const formattedProjTag = `${settings.projectPrefix}${projectName.replace(/\s+/g, '_')}`;
+        const statusTag = `${settings.statusPrefix}${status}`;
+        const priorityTag = `${settings.priorityPrefix}${priority || 1}`;
+
+        if (parentTask) {
+            let parentLineIndex = -1;
+            if (parentTask.lineIndex >= 0 && parentTask.lineIndex < lines.length) {
+                if (lines[parentTask.lineIndex] === parentTask.rawLine || lines[parentTask.lineIndex].includes(parentTask.text)) {
+                    parentLineIndex = parentTask.lineIndex;
+                }
+            }
+            if (parentLineIndex === -1) {
+                for (let i = 0; i < lines.length; i++) {
+                    if (lines[i].match(/^(\s*)-\s*\[([ x/])\]/) && lines[i].includes(parentTask.text)) {
+                        parentLineIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            if (parentLineIndex !== -1) {
+                const parentMatch = lines[parentLineIndex].match(/^(\s*)-\s*\[([ x/])\]/);
+                const parentIndent = parentMatch ? parentMatch[1] : '';
+                const childIndent = parentIndent + '    ';
+                
+                let taskLine = `${childIndent}- [ ] ${taskText} ${statusTag} ${priorityTag} ${formattedProjTag}`;
+                if (startDate) taskLine += ` ${settings.startDatePrefix}${startDate}`;
+                if (dueDate) taskLine += ` ${settings.dueDatePrefix}${dueDate}`;
+
+                // Вставляем в конец блока подзадач данного родителя
+                let insertLineIndex = parentLineIndex + 1;
+                const parentIndentLen = parentIndent.length;
+
+                while (insertLineIndex < lines.length) {
+                    const curLine = lines[insertLineIndex];
+                    if (curLine.match(/^#{1,6}\s+/)) break;
+                    const m = curLine.match(/^(\s*)-\s*\[([ x/])\]/);
+                    if (m) {
+                        if (m[1].length <= parentIndentLen) break;
+                    } else if (curLine.trim().length === 0) {
+                        let nextNonEmpty = insertLineIndex + 1;
+                        while (nextNonEmpty < lines.length && lines[nextNonEmpty].trim().length === 0) nextNonEmpty++;
+                        if (nextNonEmpty < lines.length) {
+                            const nextM = lines[nextNonEmpty].match(/^(\s*)-\s*\[([ x/])\]/);
+                            if (!nextM || nextM[1].length <= parentIndentLen || lines[nextNonEmpty].match(/^#{1,6}\s+/)) break;
+                        } else {
+                            break;
+                        }
+                    }
+                    insertLineIndex++;
+                }
+
+                lines.splice(insertLineIndex, 0, taskLine);
+                await app.vault.modify(file, lines.join('\n'));
+                return;
+            }
+        }
+
+        let projectLineIndex = -1;
         for (let i = 0; i < lines.length; i++) {
             const hMatch = lines[i].match(/^#{1,6}\s+(.*)$/);
             if (hMatch && hMatch[1].trim() === projectName) {
@@ -460,10 +677,6 @@ class TaskEngine {
             }
         }
 
-        const formattedProjTag = `${settings.projectPrefix}${projectName.replace(/\s+/g, '_')}`;
-        const statusTag = `${settings.statusPrefix}${status}`;
-        const priorityTag = `${settings.priorityPrefix}${priority || 1}`;
-        
         let taskLine = `- [ ] ${taskText} ${statusTag} ${priorityTag} ${formattedProjTag}`;
         if (startDate) taskLine += ` ${settings.startDatePrefix}${startDate}`;
         if (dueDate) taskLine += ` ${settings.dueDatePrefix}${dueDate}`;
@@ -475,6 +688,146 @@ class TaskEngine {
         }
 
         await app.vault.modify(file, lines.join('\n'));
+    }
+
+    static async moveTaskToParent(app, settings, task, newParentTask) {
+        const file = app.vault.getAbstractFileByPath(settings.masterFilePath);
+        if (!(file instanceof obsidian.TFile)) return false;
+
+        const content = await app.vault.read(file);
+        const lines = content.split('\n');
+
+        // Находим строку перемещаемой задачи
+        let taskLineIndex = -1;
+        if (task.lineIndex >= 0 && task.lineIndex < lines.length) {
+            if (lines[task.lineIndex] === task.rawLine || lines[task.lineIndex].includes(task.text)) {
+                taskLineIndex = task.lineIndex;
+            }
+        }
+        if (taskLineIndex === -1) {
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].match(/^(\s*)-\s*\[([ x/])\]/) && lines[i].includes(task.text)) {
+                    taskLineIndex = i;
+                    break;
+                }
+            }
+        }
+        if (taskLineIndex === -1) return false;
+
+        const taskMatch = lines[taskLineIndex].match(/^(\s*)-\s*\[([ x/])\]/);
+        const currentTaskIndentLen = taskMatch ? taskMatch[1].length : 0;
+
+        // Вычисляем все строки поддерева задачи
+        let subtreeEndIndex = taskLineIndex + 1;
+        while (subtreeEndIndex < lines.length) {
+            const cur = lines[subtreeEndIndex];
+            if (cur.match(/^#{1,6}\s+/)) break;
+            const m = cur.match(/^(\s*)-\s*\[([ x/])\]/);
+            if (m) {
+                if (m[1].length <= currentTaskIndentLen) break;
+            } else if (cur.trim().length === 0) {
+                let nextNonEmpty = subtreeEndIndex + 1;
+                while (nextNonEmpty < lines.length && lines[nextNonEmpty].trim().length === 0) nextNonEmpty++;
+                if (nextNonEmpty < lines.length) {
+                    const nextM = lines[nextNonEmpty].match(/^(\s*)-\s*\[([ x/])\]/);
+                    if (!nextM || nextM[1].length <= currentTaskIndentLen || lines[nextNonEmpty].match(/^#{1,6}\s+/)) break;
+                } else break;
+            }
+            subtreeEndIndex++;
+        }
+
+        const subtreeLines = lines.slice(taskLineIndex, subtreeEndIndex);
+
+        // Рассчитываем целевой отступ
+        let targetTaskIndentLen = 0;
+        if (newParentTask) {
+            let parentLineIndex = -1;
+            if (newParentTask.lineIndex >= 0 && newParentTask.lineIndex < lines.length) {
+                if (lines[newParentTask.lineIndex] === newParentTask.rawLine || lines[newParentTask.lineIndex].includes(newParentTask.text)) {
+                    parentLineIndex = newParentTask.lineIndex;
+                }
+            }
+            if (parentLineIndex === -1) {
+                for (let i = 0; i < lines.length; i++) {
+                    if (lines[i].match(/^(\s*)-\s*\[([ x/])\]/) && lines[i].includes(newParentTask.text)) {
+                        parentLineIndex = i;
+                        break;
+                    }
+                }
+            }
+            if (parentLineIndex === -1) return false;
+            // Проверка: целевой родитель не должен быть внутри перемещаемого поддерева
+            if (parentLineIndex >= taskLineIndex && parentLineIndex < subtreeEndIndex) {
+                return false;
+            }
+            const pMatch = lines[parentLineIndex].match(/^(\s*)-\s*\[([ x/])\]/);
+            const pIndentLen = pMatch ? pMatch[1].length : 0;
+            targetTaskIndentLen = pIndentLen + 4;
+        }
+
+        const indentDelta = targetTaskIndentLen - currentTaskIndentLen;
+
+        const adjustedSubtreeLines = subtreeLines.map(line => {
+            const m = line.match(/^(\s*)(.*)$/);
+            if (!m) return line;
+            const newLen = Math.max(0, m[1].length + indentDelta);
+            return ' '.repeat(newLen) + m[2];
+        });
+
+        // Удаляем поддерево из исходной позиции
+        lines.splice(taskLineIndex, subtreeLines.length);
+
+        if (newParentTask) {
+            // Ищем нового родителя в обновленном массиве строк
+            let parentLineIndex = -1;
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].match(/^(\s*)-\s*\[([ x/])\]/) && (lines[i] === newParentTask.rawLine || lines[i].includes(newParentTask.text))) {
+                    parentLineIndex = i;
+                    break;
+                }
+            }
+            if (parentLineIndex === -1) return false;
+
+            const pMatch = lines[parentLineIndex].match(/^(\s*)-\s*\[([ x/])\]/);
+            const pIndentLen = pMatch ? pMatch[1].length : 0;
+
+            let insertIdx = parentLineIndex + 1;
+            while (insertIdx < lines.length) {
+                const cur = lines[insertIdx];
+                if (cur.match(/^#{1,6}\s+/)) break;
+                const m = cur.match(/^(\s*)-\s*\[([ x/])\]/);
+                if (m && m[1].length <= pIndentLen) break;
+                if (cur.trim().length === 0) {
+                    let nextNonEmpty = insertIdx + 1;
+                    while (nextNonEmpty < lines.length && lines[nextNonEmpty].trim().length === 0) nextNonEmpty++;
+                    if (nextNonEmpty < lines.length) {
+                        const nextM = lines[nextNonEmpty].match(/^(\s*)-\s*\[([ x/])\]/);
+                        if (!nextM || nextM[1].length <= pIndentLen || lines[nextNonEmpty].match(/^#{1,6}\s+/)) break;
+                    } else break;
+                }
+                insertIdx++;
+            }
+            lines.splice(insertIdx, 0, ...adjustedSubtreeLines);
+        } else {
+            // Корневой уровень внутри проекта
+            const projectName = task.project || 'Общие задачи';
+            let projectLineIndex = -1;
+            for (let i = 0; i < lines.length; i++) {
+                const hMatch = lines[i].match(/^#{1,6}\s+(.*)$/);
+                if (hMatch && hMatch[1].trim() === projectName) {
+                    projectLineIndex = i;
+                    break;
+                }
+            }
+            if (projectLineIndex !== -1) {
+                lines.splice(projectLineIndex + 1, 0, ...adjustedSubtreeLines);
+            } else {
+                lines.push(`\n### ${projectName}`, ...adjustedSubtreeLines);
+            }
+        }
+
+        await app.vault.modify(file, lines.join('\n'));
+        return true;
     }
 }
 
@@ -872,6 +1225,26 @@ class TaskTrackerView extends obsidian.ItemView {
         menu.addSeparator();
 
         menu.addItem(item => {
+            item.setTitle('Добавить подзадачу').setIcon('list-plus')
+                .onClick(() => {
+                    this.collapsedTasks.delete(task.lineIndex);
+                    new AddTaskModal(this.app, this.plugin, () => this.refresh(), {
+                        initialProject: task.project,
+                        initialParentTask: task
+                    }).open();
+                });
+        });
+
+        menu.addItem(item => {
+            item.setTitle('Сменить родителя...').setIcon('git-branch')
+                .onClick(() => {
+                    new ChangeTaskParentModal(this.app, this.plugin, task, () => this.refresh()).open();
+                });
+        });
+
+        menu.addSeparator();
+
+        menu.addItem(item => {
             item.setTitle('Переименовать').setIcon('edit')
                 .onClick(() => {
                     new EditTaskTextModal(this.app, this.plugin, task, () => this.refresh()).open();
@@ -993,7 +1366,9 @@ class TaskTrackerView extends obsidian.ItemView {
         const btnAddProj = controls.createEl('button', { cls: 'tt-action-btn' });
         btnAddProj.innerHTML = `${renderIcon('plus')} <span>Проект</span>`;
 
-        btnAdd.onclick = () => new AddTaskModal(this.app, this.plugin, () => this.refresh()).open();
+        btnAdd.onclick = () => new AddTaskModal(this.app, this.plugin, () => this.refresh(), {
+            initialProject: this.selectedProjectFilter !== 'ALL' ? this.selectedProjectFilter : null
+        }).open();
         btnAddProj.onclick = () => new AddProjectModal(this.app, this.plugin, () => this.refresh()).open();
 
         const mainContent = container.createDiv({ cls: 'task-tracker-view-content' });
@@ -2229,31 +2604,55 @@ class AddProjectModal extends obsidian.Modal {
 }
 
 class AddTaskModal extends obsidian.Modal {
-    constructor(app, plugin, onSuccess) {
+    constructor(app, plugin, onSuccess, options = {}) {
         super(app);
         this.plugin = plugin;
         this.onSuccess = onSuccess;
+        this.initialProject = options.initialProject || null;
+        this.initialParentTask = options.initialParentTask || null;
     }
 
     async onOpen() {
         const { contentEl } = this;
-        contentEl.createEl('h2', { text: 'Добавить задачу' });
+        contentEl.createEl('h2', { text: this.initialParentTask ? 'Добавить подзадачу' : 'Добавить задачу' });
 
         const projects = await TaskEngine.getAllProjects(this.app, this.plugin.settings);
+        const allTasks = await TaskEngine.parseMasterFile(this.app, this.plugin.settings);
 
-        let selectedProject = projects[0] || 'Общие задачи';
+        let selectedProject = this.initialProject || (this.initialParentTask ? this.initialParentTask.project : null) || projects[0] || 'Общие задачи';
+        let selectedParentTask = this.initialParentTask || null;
         let taskText = '';
         let selectedStatus = this.plugin.settings.statuses[0]?.id || 'todo';
         let selectedPriority = 1;
         let startDate = '';
         let dueDate = '';
 
+        let parentPicker = null;
+
         new obsidian.Setting(contentEl)
             .setName('Проект')
             .addDropdown(dd => {
                 projects.forEach(p => dd.addOption(p, p));
-                dd.onChange(v => selectedProject = v);
+                if (selectedProject) dd.setValue(selectedProject);
+                dd.onChange(v => {
+                    selectedProject = v;
+                    if (parentPicker) {
+                        parentPicker.setProject(v);
+                    }
+                });
             });
+
+        const parentSetting = new obsidian.Setting(contentEl)
+            .setClass('tt-parent-setting-item')
+            .setName('Родительская задача')
+            .setDesc('Необязательно. Привязывает создаваемую задачу как подзадачу');
+
+        parentPicker = createParentTaskPicker(
+            parentSetting.controlEl,
+            allTasks,
+            selectedProject,
+            selectedParentTask
+        );
 
         new obsidian.Setting(contentEl)
             .setName('Текст задачи')
@@ -2326,6 +2725,7 @@ class AddTaskModal extends obsidian.Modal {
                 .setCta()
                 .onClick(async () => {
                     if (taskText.trim()) {
+                        const finalParent = parentPicker ? parentPicker.getSelectedParent() : null;
                         await TaskEngine.addTask(
                             this.app,
                             this.plugin.settings,
@@ -2334,12 +2734,116 @@ class AddTaskModal extends obsidian.Modal {
                             selectedStatus,
                             selectedPriority,
                             startDate,
-                            dueDate
+                            dueDate,
+                            finalParent
                         );
+                        if (finalParent) {
+                            const leaf = this.app.workspace.getLeavesOfType('custom-task-tracker-view')[0];
+                            if (leaf && leaf.view instanceof TaskTrackerView) {
+                                leaf.view.collapsedTasks.delete(finalParent.lineIndex);
+                            }
+                        }
                         this.close();
                         this.onSuccess();
                     }
                 }));
+    }
+
+    onClose() {
+        const { contentEl } = this;
+        contentEl.empty();
+    }
+}
+
+class ChangeTaskParentModal extends obsidian.Modal {
+    constructor(app, plugin, task, onSuccess) {
+        super(app);
+        this.plugin = plugin;
+        this.task = task;
+        this.onSuccess = onSuccess;
+    }
+
+    async onOpen() {
+        const { contentEl } = this;
+        contentEl.createEl('h2', { text: 'Сменить родителя задачи' });
+
+        const desc = contentEl.createEl('p', { cls: 'tt-modal-task-info' });
+        desc.createSpan({ text: 'Задача: ' });
+        desc.createEl('strong', { text: this.task.text });
+        desc.createSpan({ text: ` (Проект: ${this.task.project})` });
+
+        const allTasks = await TaskEngine.parseMasterFile(this.app, this.plugin.settings);
+        const tasksMap = new Map(allTasks.map(t => [t.lineIndex, t]));
+
+        let currentParent = null;
+        if (this.task.parentLineIndex !== null && this.task.parentLineIndex !== undefined) {
+            currentParent = tasksMap.get(this.task.parentLineIndex) || null;
+        }
+
+        const isDescendant = (candidate) => {
+            if (candidate.lineIndex === this.task.lineIndex) return true;
+            let cur = candidate.parentLineIndex;
+            while (cur !== null && cur !== undefined) {
+                if (cur === this.task.lineIndex) return true;
+                const p = tasksMap.get(cur);
+                if (!p) break;
+                cur = p.parentLineIndex;
+            }
+            return false;
+        };
+
+        const parentSetting = new obsidian.Setting(contentEl)
+            .setClass('tt-parent-setting-item')
+            .setName('Новый родитель')
+            .setDesc('Выберите родительскую задачу или оставьте пустым для корневой задачи');
+
+        const parentPicker = createParentTaskPicker(
+            parentSetting.controlEl,
+            allTasks,
+            this.task.project,
+            currentParent,
+            (candidate) => isDescendant(candidate)
+        );
+
+        new obsidian.Setting(contentEl)
+            .addButton(btn => btn
+                .setButtonText('Сохранить')
+                .setCta()
+                .onClick(async () => {
+                    const newParent = parentPicker.getSelectedParent();
+                    const oldParentLine = currentParent ? currentParent.lineIndex : null;
+                    const newParentLine = newParent ? newParent.lineIndex : null;
+
+                    if (oldParentLine === newParentLine) {
+                        this.close();
+                        return;
+                    }
+
+                    const ok = await TaskEngine.moveTaskToParent(
+                        this.app,
+                        this.plugin.settings,
+                        this.task,
+                        newParent
+                    );
+
+                    if (ok) {
+                        new obsidian.Notice('Родительская задача обновлена');
+                        const leaf = this.app.workspace.getLeavesOfType('custom-task-tracker-view')[0];
+                        if (leaf && leaf.view instanceof TaskTrackerView && newParent) {
+                            leaf.view.collapsedTasks.delete(newParent.lineIndex);
+                        }
+                    } else {
+                        new obsidian.Notice('Не удалось переместить задачу');
+                    }
+
+                    this.close();
+                    this.onSuccess();
+                }));
+    }
+
+    onClose() {
+        const { contentEl } = this;
+        contentEl.empty();
     }
 }
 

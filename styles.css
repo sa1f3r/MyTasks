@@ -129,6 +129,11 @@
     overflow-y: auto;
     display: flex;
     flex-direction: column;
+    min-height: 0;
+}
+
+.task-tracker-view-content:has(.tt-calendar-container) {
+    overflow: hidden;
 }
 
 /* ==================== ИНДИКАТОРЫ ПРИОРИТЕТОВ И КНОПКИ СВЕРТЫВАНИЯ ==================== */
@@ -484,6 +489,8 @@
     display: flex;
     gap: 16px;
     height: 100%;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .tt-unscheduled-sidebar {
@@ -494,6 +501,10 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    flex-shrink: 0;
 }
 
 .tt-unscheduled-header {
@@ -547,6 +558,7 @@
     gap: 8px;
     overflow-y: auto;
     flex: 1;
+    min-height: 0;
 }
 
 .tt-unscheduled-card {
@@ -572,6 +584,8 @@
     flex-direction: column;
     gap: 8px;
     min-height: 0;
+    height: 100%;
+    overflow: hidden;
 }
 
 .tt-calendar-nav {
@@ -606,8 +620,7 @@
     flex-direction: column;
     gap: 6px;
     flex: 1;
-    overflow-y: auto;
-    padding-right: 4px;
+    overflow: hidden;
     min-height: 0;
 }
 
@@ -615,8 +628,8 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    flex: 1 0 auto;
-    min-height: 110px;
+    flex: 1 1 0;
+    min-height: min-content;
 }
 
 .tt-week-days-bg {
@@ -693,7 +706,7 @@ body.tt-resizing-active .tt-calendar-bar {
     row-gap: 4px;
     pointer-events: none;
     flex: 1;
-    min-height: 110px;
+    min-height: 0;
 }
 
 .tt-calendar-bar {
@@ -1115,4 +1128,156 @@ body.tt-resizing-active .tt-calendar-bar {
     color: var(--text-normal);
     background: var(--background-modifier-hover);
     border-color: var(--interactive-accent);
+}
+
+/* ==================== ВЫБОР РОДИТЕЛЬСКОЙ ЗАДАЧИ ==================== */
+
+.setting-item.tt-parent-setting-item,
+.setting-item:has(.tt-parent-picker-container) {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    border-top: none;
+    padding-top: 10px;
+    padding-bottom: 12px;
+}
+
+.setting-item.tt-parent-setting-item .setting-item-info,
+.setting-item:has(.tt-parent-picker-container) .setting-item-info {
+    width: 100%;
+    margin-bottom: 6px;
+}
+
+.setting-item.tt-parent-setting-item .setting-item-control,
+.setting-item:has(.tt-parent-picker-container) .setting-item-control {
+    width: 100%;
+    max-width: 100%;
+    justify-content: stretch;
+}
+
+.tt-parent-picker-container {
+    position: relative;
+    width: 100%;
+}
+
+.tt-parent-input-row {
+    display: flex;
+    align-items: center;
+    position: relative;
+    width: 100%;
+}
+
+.tt-parent-input {
+    width: 100%;
+    min-height: 38px;
+    padding: 8px 56px 8px 12px !important;
+    border-radius: 6px;
+    border: 1px solid var(--background-modifier-border);
+    background: var(--background-primary);
+    color: var(--text-normal);
+    font-size: 0.95em;
+    box-sizing: border-box;
+}
+
+.tt-parent-actions {
+    position: absolute;
+    right: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.tt-parent-btn {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    color: var(--text-muted);
+    font-size: 0.85em;
+    user-select: none;
+    transition: all 0.15s ease;
+}
+
+.tt-parent-btn:hover {
+    color: var(--text-normal);
+    background: var(--background-modifier-hover);
+}
+
+.tt-parent-clear-btn {
+    font-size: 0.85em;
+    font-weight: bold;
+}
+
+.tt-parent-suggestions-list {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    max-height: 260px;
+    overflow-y: auto;
+    z-index: 1000;
+}
+
+.tt-parent-suggestion-item {
+    padding: 9px 14px;
+    font-size: 0.92em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.15s ease;
+    color: var(--text-normal);
+    word-break: break-word;
+}
+
+.tt-parent-suggestion-item:hover {
+    background: var(--background-modifier-hover);
+}
+
+.tt-parent-suggestion-item.is-selected {
+    background: var(--background-modifier-active-hover);
+    font-weight: 600;
+    color: var(--interactive-accent);
+}
+
+.tt-parent-suggestion-item.is-root-option {
+    color: var(--text-muted);
+    font-style: italic;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.tt-parent-suggestion-item.is-root-option:hover {
+    color: var(--text-normal);
+}
+
+.tt-parent-item-prefix {
+    color: var(--text-muted);
+    font-family: monospace;
+    white-space: pre;
+    font-weight: normal;
+}
+
+.tt-parent-suggestion-empty {
+    padding: 10px 12px;
+    font-size: 0.85em;
+    color: var(--text-muted);
+    font-style: italic;
+    text-align: center;
+}
+
+.tt-modal-task-info {
+    margin-bottom: 14px;
+    padding: 8px 12px;
+    background: var(--background-secondary);
+    border-radius: 6px;
+    border-left: 3px solid var(--interactive-accent);
+    font-size: 0.9em;
+    color: var(--text-normal);
 }
