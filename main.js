@@ -280,6 +280,28 @@ function createParentTaskPicker(containerEl, allTasks, initialProject, initialPa
     };
 }
 
+// Поддерево задачи: индекс первой строки после задачи и всех её подзадач
+function findSubtreeEnd(lines, taskLineIndex, indentLen) {
+    let end = taskLineIndex + 1;
+    while (end < lines.length) {
+        const cur = lines[end];
+        if (cur.match(/^#{1,6}\s+/)) break;
+        const m = cur.match(/^(\s*)-\s*\[([ x/])\]/);
+        if (m) {
+            if (m[1].length <= indentLen) break;
+        } else if (cur.trim().length === 0) {
+            let next = end + 1;
+            while (next < lines.length && lines[next].trim().length === 0) next++;
+            if (next < lines.length) {
+                const nm = lines[next].match(/^(\s*)-\s*\[([ x/])\]/);
+                if (!nm || nm[1].length <= indentLen || lines[next].match(/^#{1,6}\s+/)) break;
+            } else break;
+        }
+        end++;
+    }
+    return end;
+}
+
 class TaskEngine {
     static async getAllProjects(app, settings) {
         const file = app.vault.getAbstractFileByPath(settings.masterFilePath);
@@ -316,6 +338,7 @@ class TaskEngine {
         const lines = content.split('\n');
         const tasks = [];
         let currentHeaderProject = 'Общие задачи';
+        let seenHeading = false;
         let fileNeedsUpdate = false;
 
         const parentStack = [];
@@ -326,6 +349,7 @@ class TaskEngine {
             const headingMatch = line.match(/^#{1,6}\s+(.*)$/);
             if (headingMatch) {
                 currentHeaderProject = headingMatch[1].trim();
+                seenHeading = true;
                 parentStack.length = 0;
                 continue;
             }
@@ -359,15 +383,23 @@ class TaskEngine {
                     rawText = rawText.replace(priorityMatch[0], '');
                 }
 
+                // Проект определяется заголовком, под которым стоит задача.
+                // Метка @project/ подгоняется под заголовок автоматически.
                 let project = currentHeaderProject;
                 const projectRegex = new RegExp(`${escapeRegExp(settings.projectPrefix)}([^\\s]+)`, 'i');
                 const projectMatch = rawText.match(projectRegex);
+                const headerTagValue = currentHeaderProject.replace(/\s+/g, '_');
 
                 if (projectMatch) {
-                    project = projectMatch[1].replace(/_/g, ' ').trim();
                     rawText = rawText.replace(projectMatch[0], '');
+                    if (!seenHeading) {
+                        project = projectMatch[1].replace(/_/g, ' ').trim();
+                    } else if (projectMatch[1] !== headerTagValue) {
+                        lines[index] = lines[index].replace(projectMatch[0], `${settings.projectPrefix}${headerTagValue}`);
+                        fileNeedsUpdate = true;
+                    }
                 } else {
-                    const projTag = `${settings.projectPrefix}${project.replace(/\s+/g, '_')}`;
+                    const projTag = `${settings.projectPrefix}${headerTagValue}`;
                     lines[index] = `${lines[index]} ${projTag}`;
                     fileNeedsUpdate = true;
                 }
@@ -688,6 +720,71 @@ class TaskEngine {
         }
 
         await app.vault.modify(file, lines.join('\n'));
+    }
+
+    // Перенести задачу (вместе с подзадачами) под заголовок другого проекта
+    static async moveTaskToProject(app, settings, task, projectName) {
+        const file = app.vault.getAbstractFileByPath(settings.masterFilePath);
+        if (!(file instanceof obsidian.TFile)) return false;
+
+        const content = await app.vault.read(file);
+        const lines = content.split('\n');
+
+        let taskLineIndex = -1;
+        if (task.lineIndex >= 0 && task.lineIndex < lines.length && lines[task.lineIndex] === task.rawLine) {
+            taskLineIndex = task.lineIndex;
+        }
+        if (taskLineIndex === -1) {
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].match(/^(\s*)-\s*\[([ x/])\]/) && lines[i].includes(task.text)) {
+                    taskLineIndex = i;
+                    break;
+                }
+            }
+        }
+        if (taskLineIndex === -1) return false;
+
+        const taskMatch = lines[taskLineIndex].match(/^(\s*)-\s*\[([ x/])\]/);
+        const indentLen = taskMatch ? taskMatch[1].length : 0;
+        const subtreeEnd = findSubtreeEnd(lines, taskLineIndex, indentLen);
+
+        const projectRegex = new RegExp(`${escapeRegExp(settings.projectPrefix)}[^\\s]+`, 'i');
+        const newTag = `${settings.projectPrefix}${projectName.replace(/\s+/g, '_')}`;
+
+        const moved = lines.slice(taskLineIndex, subtreeEnd)
+            .map(line => {
+                const m = line.match(/^(\s*)(.*)$/);
+                const newLen = Math.max(0, m[1].length - indentLen);
+                let out = ' '.repeat(newLen) + m[2];
+                if (out.match(/^\s*-\s*\[([ x/])\]/)) {
+                    out = projectRegex.test(out) ? out.replace(projectRegex, newTag) : `${out} ${newTag}`;
+                }
+                return out;
+            });
+        // хвостовые пустые строки оставляем на месте
+        while (moved.length > 1 && moved[moved.length - 1].trim() === '') moved.pop();
+
+        lines.splice(taskLineIndex, moved.length);
+
+        let headingIdx = -1;
+        for (let i = 0; i < lines.length; i++) {
+            const h = lines[i].match(/^#{1,6}\s+(.*)$/);
+            if (h && h[1].trim() === projectName) { headingIdx = i; break; }
+        }
+
+        if (headingIdx === -1) {
+            while (lines.length && lines[lines.length - 1].trim() === '') lines.pop();
+            lines.push('', `### ${projectName}`, ...moved);
+        } else {
+            // в конец раздела проекта (перед следующим заголовком, без хвостовых пустых строк)
+            let insertIdx = headingIdx + 1;
+            while (insertIdx < lines.length && !lines[insertIdx].match(/^#{1,6}\s+/)) insertIdx++;
+            while (insertIdx > headingIdx + 1 && lines[insertIdx - 1].trim() === '') insertIdx--;
+            lines.splice(insertIdx, 0, ...moved);
+        }
+
+        await app.vault.modify(file, lines.join('\n'));
+        return true;
     }
 
     static async moveTaskToParent(app, settings, task, newParentTask) {
@@ -1233,6 +1330,24 @@ class TaskTrackerView extends obsidian.ItemView {
                         initialParentTask: task
                     }).open();
                 });
+        });
+
+        // Перенос в другой проект
+        menu.addItem(item => {
+            item.setTitle('Перенести в проект').setIcon('folder-input');
+            const subMenu = item.setSubmenu();
+            (this.allProjects || []).forEach(proj => {
+                subMenu.addItem(sub => {
+                    sub.setTitle(proj)
+                        .setChecked(task.project === proj)
+                        .onClick(async () => {
+                            if (task.project === proj) return;
+                            const ok = await TaskEngine.moveTaskToProject(this.app, this.plugin.settings, task, proj);
+                            if (!ok) new obsidian.Notice('Не удалось найти задачу в файле');
+                            await this.refresh();
+                        });
+                });
+            });
         });
 
         menu.addItem(item => {
