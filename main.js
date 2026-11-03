@@ -63,6 +63,71 @@ function renderIcon(iconName) {
     return NOTION_ICONS[iconName] || '';
 }
 
+// Ссылки [[...]] в тексте задач
+const WIKILINK_REGEX = /\[\[([^\[\]|]+?)(?:\|([^\[\]]*?))?\]\]/g;
+
+function wikilinkDisplay(target, alias) {
+    if (alias && alias.trim()) return alias.trim();
+    const hashIdx = target.indexOf('#');
+    if (hashIdx === -1) return target.trim();
+    const note = target.slice(0, hashIdx).trim();
+    const sub = target.slice(hashIdx + 1).replace(/^\^/, '').trim();
+    if (!note) return sub;
+    return sub ? `${note} > ${sub}` : note;
+}
+
+function stripWikilinks(text) {
+    if (!text) return text;
+    return text.replace(WIKILINK_REGEX, (m, target, alias) => wikilinkDisplay(target, alias));
+}
+
+function renderTaskText(view, parent, text, cls) {
+    const span = parent.createSpan({ cls });
+    const app = view.app;
+    const sourcePath = view.plugin.settings.masterFilePath;
+    const str = text || '';
+    let last = 0;
+    WIKILINK_REGEX.lastIndex = 0;
+    let m;
+    while ((m = WIKILINK_REGEX.exec(str)) !== null) {
+        if (m.index > last) span.appendText(str.slice(last, m.index));
+        const target = m[1].trim();
+        const linkpath = target.split('#')[0].trim();
+        const a = span.createEl('a', { cls: 'internal-link tt-task-link', text: wikilinkDisplay(target, m[2]) });
+        a.setAttribute('data-href', target);
+        a.setAttribute('href', target);
+        a.setAttribute('draggable', 'false');
+        if (linkpath && !app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath)) {
+            a.addClass('is-unresolved');
+        }
+        a.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            app.workspace.openLinkText(target, sourcePath, obsidian.Keymap.isModEvent(e));
+        });
+        a.addEventListener('auxclick', (e) => {
+            if (e.button !== 1) return;
+            e.preventDefault();
+            e.stopPropagation();
+            app.workspace.openLinkText(target, sourcePath, 'tab');
+        });
+        a.addEventListener('mousedown', (e) => e.stopPropagation());
+        a.addEventListener('mouseover', (e) => {
+            app.workspace.trigger('hover-link', {
+                event: e,
+                source: 'custom-task-tracker-view',
+                hoverParent: view,
+                targetEl: a,
+                linktext: target,
+                sourcePath
+            });
+        });
+        last = m.index + m[0].length;
+    }
+    if (last < str.length) span.appendText(str.slice(last));
+    return span;
+}
+
 function escapeRegExp(string) {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -135,7 +200,7 @@ function createParentTaskPicker(containerEl, allTasks, initialProject, initialPa
         placeholder: 'Без родителя (корневая задача)'
     });
     if (selectedParent) {
-        input.value = selectedParent.text;
+        input.value = stripWikilinks(selectedParent.text);
     }
 
     const actions = inputRow.createDiv({ cls: 'tt-parent-actions' });
@@ -178,7 +243,7 @@ function createParentTaskPicker(containerEl, allTasks, initialProject, initialPa
 
         const filtered = available.filter(t => {
             if (!normFilter) return true;
-            return t.text.toLowerCase().includes(normFilter);
+            return t.text.toLowerCase().includes(normFilter) || stripWikilinks(t.text).toLowerCase().includes(normFilter);
         });
 
         if (filtered.length === 0 && normFilter) {
@@ -197,7 +262,7 @@ function createParentTaskPicker(containerEl, allTasks, initialProject, initialPa
                 prefixSpan.setText('— '.repeat(t.level));
             }
             const textSpan = item.createSpan({ cls: 'tt-parent-item-text' });
-            textSpan.setText(t.text);
+            textSpan.setText(stripWikilinks(t.text));
 
             item.onclick = (e) => {
                 e.stopPropagation();
@@ -209,7 +274,7 @@ function createParentTaskPicker(containerEl, allTasks, initialProject, initialPa
     function selectTask(task) {
         selectedParent = task;
         if (task) {
-            input.value = task.text;
+            input.value = stripWikilinks(task.text);
             clearBtn.style.display = 'inline-flex';
         } else {
             input.value = '';
@@ -1522,7 +1587,7 @@ class TaskTrackerView extends obsidian.ItemView {
                 pBadge.title = pInfo.label;
 
                 if (task.parentText) {
-                    card.createDiv({ cls: 'tt-subtask-indicator', text: `↳ ${task.parentText}` });
+                    card.createDiv({ cls: 'tt-subtask-indicator', text: `↳ ${stripWikilinks(task.parentText)}` });
                 }
 
                 const titleRow = card.createDiv({ cls: 'tt-card-title-row' });
@@ -1547,7 +1612,7 @@ class TaskTrackerView extends obsidian.ItemView {
                     }
                 }
 
-                titleRow.createSpan({ text: task.text, cls: 'tt-card-title-text' });
+                renderTaskText(this, titleRow, task.text, 'tt-card-title-text');
 
                 const datesDiv = card.createDiv({ cls: 'tt-card-dates' });
                 if (task.startDate) datesDiv.createDiv({ cls: 'tt-date-tag' }).innerHTML = `${renderIcon('start')} ${task.startDate}`;
@@ -1649,11 +1714,11 @@ class TaskTrackerView extends obsidian.ItemView {
                         badge.style.backgroundColor = stConfig.color;
                         attachStatusBadgeEvents(badge);
                     }
-                    item.createSpan({ text: task.text, cls: 'tt-task-text' });
+                    renderTaskText(this, item, task.text, 'tt-task-text');
                     if (task.dueDate) item.createSpan({ cls: 'tt-date-tag' }).innerHTML = `${renderIcon('calendar')} ${task.dueDate}`;
                     if (task.completionDate) item.createSpan({ cls: 'tt-date-tag' }).innerHTML = `${renderIcon('check')} ${task.completionDate}`;
                 } else {
-                    item.createSpan({ text: task.text, cls: 'tt-task-text' });
+                    renderTaskText(this, item, task.text, 'tt-task-text');
                     if (task.dueDate) item.createSpan({ cls: 'tt-date-tag' }).innerHTML = `${renderIcon('calendar')} ${task.dueDate}`;
                     if (task.completionDate) item.createSpan({ cls: 'tt-date-tag' }).innerHTML = `${renderIcon('check')} ${task.completionDate}`;
                     if (stConfig) {
@@ -1690,7 +1755,7 @@ class TaskTrackerView extends obsidian.ItemView {
 
             const ghost = document.createElement('div');
             ghost.className = 'tt-drag-ghost';
-            ghost.textContent = task.text;
+            ghost.textContent = stripWikilinks(task.text);
 
             const stConfig = this.plugin.settings.statuses.find(s => s.id === task.status);
             ghost.style.backgroundColor = stConfig ? stConfig.color : 'var(--interactive-accent)';
@@ -1847,7 +1912,7 @@ class TaskTrackerView extends obsidian.ItemView {
             pBadge.title = pInfo.label;
 
             if (task.parentText) {
-                card.createDiv({ cls: 'tt-subtask-indicator', text: `↳ ${task.parentText}` });
+                card.createDiv({ cls: 'tt-subtask-indicator', text: `↳ ${stripWikilinks(task.parentText)}` });
             }
 
             const titleRow = card.createDiv({ cls: 'tt-card-title-row' });
@@ -1872,7 +1937,7 @@ class TaskTrackerView extends obsidian.ItemView {
                 }
             }
 
-            titleRow.createSpan({ cls: 'tt-unscheduled-card-text', text: task.text });
+            renderTaskText(this, titleRow, task.text, 'tt-unscheduled-card-text');
 
             this.attachTaskDragEvents(card, task);
 
@@ -2049,7 +2114,7 @@ class TaskTrackerView extends obsidian.ItemView {
                 const pBadge = bar.createSpan({ text: pInfo.badge, cls: `tt-priority-badge ${pInfo.class} tt-bar-p-badge` });
                 pBadge.title = pInfo.label;
 
-                bar.createSpan({ cls: 'tt-bar-title', text: task.text });
+                renderTaskText(this, bar, task.text, 'tt-bar-title');
                 if (task.childCount) {
                     const badge = bar.createSpan({ cls: 'tt-subtask-count tt-bar-subtask-count', text: `${task.childCount}` });
                     badge.title = `Подзадач: ${task.childCount}`;
@@ -2505,7 +2570,7 @@ class EditDatesModal extends obsidian.Modal {
 
     onOpen() {
         const { contentEl } = this;
-        contentEl.createEl('h3', { text: `Даты: ${this.task.text}` });
+        contentEl.createEl('h3', { text: `Даты: ${stripWikilinks(this.task.text)}` });
 
         let startDate = this.task.startDate || '';
         let dueDate = this.task.dueDate || '';
@@ -2769,7 +2834,7 @@ class ChangeTaskParentModal extends obsidian.Modal {
 
         const desc = contentEl.createEl('p', { cls: 'tt-modal-task-info' });
         desc.createSpan({ text: 'Задача: ' });
-        desc.createEl('strong', { text: this.task.text });
+        desc.createEl('strong', { text: stripWikilinks(this.task.text) });
         desc.createSpan({ text: ` (Проект: ${this.task.project})` });
 
         const allTasks = await TaskEngine.parseMasterFile(this.app, this.plugin.settings);
@@ -3059,6 +3124,12 @@ class TaskTrackerPlugin extends obsidian.Plugin {
         });
 
         this.addSettingTab(new TaskTrackerSettingTab(this.app, this));
+
+        // Предпросмотр заметок по ссылкам из задач (Ctrl + наведение)
+        this.registerHoverLinkSource('custom-task-tracker-view', {
+            display: 'My Tasks',
+            defaultMod: true
+        });
     }
 
     async activateView() {

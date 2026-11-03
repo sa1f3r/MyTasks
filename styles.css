@@ -1281,3 +1281,14 @@ body.tt-resizing-active .tt-calendar-bar {
     font-size: 0.9em;
     color: var(--text-normal);
 }
+
+/* Wikilinks [[...]] in task text */
+.tt-task-link {
+    cursor: pointer;
+}
+.tt-calendar-bar .tt-task-link,
+.tt-calendar-bar .tt-task-link.is-unresolved {
+    color: inherit;
+    text-decoration: underline;
+    opacity: 1;
+}
